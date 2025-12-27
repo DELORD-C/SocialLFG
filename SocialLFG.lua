@@ -28,6 +28,8 @@ function SocialLFG:OnLoad()
     self.frame:RegisterEvent("CHAT_MSG_ADDON")
     self.frame:RegisterEvent("FRIENDLIST_UPDATE")
     self.frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    self.frame:RegisterEvent("GROUP_FORMED")
+    self.frame:RegisterEvent("GROUP_LEFT")
     self.frame:SetScript("OnEvent", function(self, event, ...) SocialLFG:OnEvent(event, ...) end)
     self.frame:SetScript("OnShow", function() SocialLFG:OnShow() end)
     
@@ -118,6 +120,9 @@ function SocialLFG:OnEvent(event, ...)
         if not self.db.guildLFG then
             self.db.guildLFG = {}
         end
+        -- Clear old list data on reload to get fresh data
+        wipe(self.db.guildLFG)
+        wipe(self.db.friendsLFG)
         if not self.db.queriedFriends then
             self.db.queriedFriends = {}
         end
@@ -130,6 +135,10 @@ function SocialLFG:OnEvent(event, ...)
         end
         if not self.db.savedRoles then
             self.db.savedRoles = {}
+        end
+        -- Track if player was registered before joining a group
+        if not self.db.wasRegisteredBeforeGroup then
+            self.db.wasRegisteredBeforeGroup = false
         end
         
         -- DEBUG: Dump saved data
@@ -176,7 +185,16 @@ function SocialLFG:OnEvent(event, ...)
         if not self.updateTimer then
             self.updateTimer = C_Timer.NewTicker(15, function()
                 if SocialLFG.frame:IsShown() then
+                    -- Query all guild members
                     SocialLFG:SendAddonMessage("QUERY", "GUILD")
+                    -- Query all connected friends
+                    local numFriends = C_FriendList.GetNumFriends()
+                    for i = 1, numFriends do
+                        local info = C_FriendList.GetFriendInfo(i)
+                        if info.connected then
+                            SocialLFG:SendAddonMessage("QUERY", "WHISPER", info.name)
+                        end
+                    end
                     SocialLFG:UpdateList()
                 end
             end)
@@ -190,6 +208,35 @@ function SocialLFG:OnEvent(event, ...)
         self:UpdateFriends()
     elseif event == "GUILD_ROSTER_UPDATE" then
         -- Optional: query guild if needed
+    elseif event == "GROUP_FORMED" or event == "GROUP_LEFT" then
+        self:HandleGroupStatusChange(event)
+    end
+end
+
+function SocialLFG:HandleGroupStatusChange(event)
+    if event == "GROUP_FORMED" then
+        -- Player joined a group
+        if #self.db.myStatus.categories > 0 then
+            self.db.wasRegisteredBeforeGroup = true
+            print("|cFFFF9900[SocialLFG] Temporarily unregistered while in a group|r")
+            self:UnregisterLFG()
+        end
+    elseif event == "GROUP_LEFT" then
+        -- Player left group - re-register if they were registered before
+        if self.db.wasRegisteredBeforeGroup then
+            print("|cFFFF9900[SocialLFG] Re-registering after leaving group|r")
+            -- Restore saved status and re-register
+            self.db.myStatus = {
+                categories = self.db.savedCategories or {},
+                roles = self.db.savedRoles or {}
+            }
+            self:SendUpdate()
+            self:UpdateButtonState()
+            if self.frame:IsShown() then
+                self:OnShow()
+            end
+            self.db.wasRegisteredBeforeGroup = false
+        end
     end
 end
 
@@ -201,6 +248,9 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
     elseif cmd == "QUERY" then
         if #self.db.myStatus.categories > 0 then
             self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
+        else
+            -- Send empty status to indicate we're unregistered
+            self:SendAddonMessage("STATUS||", "WHISPER", sender)
         end
     elseif cmd == "UNREGISTER" then
         local source = (channel == "GUILD") and "guild" or "friend"
@@ -210,16 +260,18 @@ end
 
 function SocialLFG:UpdateStatus(player, status, source)
     if source == "guild" then
-        if status then
-            self.db.guildLFG[player] = status
-        else
+        -- Remove if status is nil or has no categories
+        if status == nil or #status.categories == 0 then
             self.db.guildLFG[player] = nil
+        else
+            self.db.guildLFG[player] = status
         end
     else
-        if status then
-            self.db.friendsLFG[player] = status
-        else
+        -- Remove if status is nil or has no categories
+        if status == nil or #status.categories == 0 then
             self.db.friendsLFG[player] = nil
+        else
+            self.db.friendsLFG[player] = status
         end
     end
     if self.frame:IsShown() then
@@ -324,8 +376,13 @@ end
 function SocialLFG:UnregisterLFG()
     self.db.myStatus = {categories = {}, roles = {}}
     self:SendAddonMessage("UNREGISTER", "GUILD")
-    for friend in pairs(self.db.friendsLFG) do
-        self:SendAddonMessage("UNREGISTER", "WHISPER", friend)
+    -- Send UNREGISTER to all connected friends, not just those in friendsLFG
+    local numFriends = C_FriendList.GetNumFriends()
+    for i = 1, numFriends do
+        local info = C_FriendList.GetFriendInfo(i)
+        if info.connected then
+            self:SendAddonMessage("UNREGISTER", "WHISPER", info.name)
+        end
     end
     self:UpdateButtonState()
 end
