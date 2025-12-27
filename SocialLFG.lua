@@ -155,10 +155,7 @@ function SocialLFG:OnEvent(event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix == PREFIX then
-            if channel == "GUILD" then
-                self:UpdateStatus(sender, {categories = {}, roles = {}}, "guild")
-            end
-            self:HandleAddonMessage(message, sender)
+            self:HandleAddonMessage(message, sender, channel)
         end
     elseif event == "FRIENDLIST_UPDATE" then
         self:UpdateFriends()
@@ -167,16 +164,18 @@ function SocialLFG:OnEvent(event, ...)
     end
 end
 
-function SocialLFG:HandleAddonMessage(message, sender)
+function SocialLFG:HandleAddonMessage(message, sender, channel)
     local cmd, arg1, arg2 = strsplit("|", message)
     if cmd == "STATUS" then
-        self:UpdateStatus(sender, {categories = {strsplit(",", arg1)}, roles = {strsplit(",", arg2)}}, "friend")
+        local source = (channel == "GUILD") and "guild" or "friend"
+        self:UpdateStatus(sender, {categories = {strsplit(",", arg1)}, roles = {strsplit(",", arg2)}}, source)
     elseif cmd == "QUERY" then
         if #self.db.myStatus.categories > 0 then
             self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
         end
     elseif cmd == "UNREGISTER" then
-        self:UpdateStatus(sender, nil, "friend")
+        local source = (channel == "GUILD") and "guild" or "friend"
+        self:UpdateStatus(sender, nil, source)
     end
 end
 
@@ -342,6 +341,10 @@ function SocialLFG:UpdateList()
     wipe(self.listFrames)
     local previous = nil
     local function AddEntry(player, status)
+        -- Skip entries with no categories
+        if not status or #status.categories == 0 then
+            return
+        end
         local frame = CreateFrame("Frame", nil, SocialLFGScrollChild)
         frame:SetSize(500, 20)
         if previous then
