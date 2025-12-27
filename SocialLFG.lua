@@ -34,7 +34,6 @@ function SocialLFG:OnLoad()
     self.frame:SetScript("OnDragStop", self.frame.StopMovingOrSizing)
     self.frame:SetFrameStrata("DIALOG")
     self.frame:SetFrameLevel(100)
-    self.frame:EnableKeyboard(true)
     
     local _, class = UnitClass("player")
     local allowed = classRoles[class] or roles
@@ -70,7 +69,7 @@ function SocialLFG:OnLoad()
     icon:SetSize(20, 20)
     icon:SetPoint("CENTER")
     
-    self.minimapButton:SetScript("OnClick", function() SocialLFG.frame:Show() end)
+    self.minimapButton:SetScript("OnClick", function() SocialLFG:ToggleWindow() end)
     self.minimapButton:SetScript("OnDragStart", function() self.minimapButton:StartMoving() end)
     self.minimapButton:SetScript("OnDragStop", function() 
         self.minimapButton:StopMovingOrSizing()
@@ -98,6 +97,9 @@ function SocialLFG:OnEvent(event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix == PREFIX then
+            if channel == "GUILD" then
+                self:UpdateStatus(sender, {categories = {}, roles = {}}, "guild")
+            end
             self:HandleAddonMessage(message, sender)
         end
     elseif event == "FRIENDLIST_UPDATE" then
@@ -110,18 +112,18 @@ end
 function SocialLFG:HandleAddonMessage(message, sender)
     local cmd, arg1, arg2 = strsplit("|", message)
     if cmd == "STATUS" then
-        self:UpdateStatus(sender, {categories = {strsplit(",", arg1)}, roles = {strsplit(",", arg2)}})
+        self:UpdateStatus(sender, {categories = {strsplit(",", arg1)}, roles = {strsplit(",", arg2)}}, "friend")
     elseif cmd == "QUERY" then
         if #self.db.myStatus.categories > 0 then
             self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
         end
     elseif cmd == "UNREGISTER" then
-        self:UpdateStatus(sender, nil)
+        self:UpdateStatus(sender, nil, "friend")
     end
 end
 
-function SocialLFG:UpdateStatus(player, status)
-    if UnitInGuild(player) then
+function SocialLFG:UpdateStatus(player, status, source)
+    if source == "guild" then
         if status then
             self.db.guildLFG[player] = status
         else
@@ -162,6 +164,14 @@ function SocialLFG:UpdateMinimapPosition()
     local x = cos(angle) * 80
     local y = sin(angle) * 80
     self.minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
+end
+
+function SocialLFG:ToggleWindow()
+    if self.frame:IsShown() then
+        self.frame:Hide()
+    else
+        self.frame:Show()
+    end
 end
 
 function SocialLFG:UpdateButtonState()
@@ -284,18 +294,16 @@ function SocialLFG:UpdateList()
         else
             frame:SetPoint("TOPLEFT", SocialLFGScrollChild, "TOPLEFT", 0, 0)
         end
-        local unit = Ambiguate(player, "none")
-        local ilvl = UnitItemLevel(unit) or "N/A"
         local rio = "N/A"
         if RaiderIO then
-            local profile = RaiderIO.GetProfile(unit)
+            local profile = RaiderIO.GetProfile(player)
             if profile and profile.mythicPlusScore then
                 rio = profile.mythicPlusScore
             end
         end
         local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         nameText:SetPoint("LEFT", 0, 0)
-        nameText:SetText(player .. " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ") Ilvl: " .. ilvl .. " Rio: " .. rio)
+        nameText:SetText(player .. " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ") Rio: " .. rio)
         local inviteBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         inviteBtn:SetSize(60, 20)
         inviteBtn:SetPoint("RIGHT", 0, 0)

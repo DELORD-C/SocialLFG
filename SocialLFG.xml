@@ -2,14 +2,6 @@
 <Frame name="SocialLFGFrame" parent="UIParent" hidden="true">
 <Size x="550" y="500"/>
 <Anchors><Anchor point="CENTER"/></Anchors>
-<TitleRegion setAllPoints="true"/>
-<FrameStrata val="DIALOG"/>
-<FrameLevel val="100"/>
-<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
-<BackgroundInsets left="11" right="12" top="12" bottom="11"/>
-<EdgeSize val="32"/>
-<TileSize val="32"/>
-</Backdrop>
 <Layers><Layer level="BACKGROUND">
 <Texture setAllPoints="true">
 <Color r="0" g="0" b="0" a="0.8"/>
@@ -25,7 +17,7 @@
 <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-105"/></Anchors>
 </FontString>
 <FontString inherits="GameFontNormal" text="LFG Members:">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGRegisterButton" relativePoint="BOTTOMLEFT" x="0" y="-10"/></Anchors>
+<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-180"/></Anchors>
 </FontString>
 </Layer>
 </Layers>
@@ -139,7 +131,7 @@
 <Scripts>
 <OnLoad>SocialLFG:OnLoad()</OnLoad>
 <OnShow>SocialLFG:OnShow()</OnShow>
-<OnKeyDown>if key == "ESCAPE" then self:Hide() end</OnKeyDown>
+<OnKeyDown>if key == "ESCAPE" then self:Hide(); return true; end</OnKeyDown>
 </Scripts>
 </Frame>
 </Ui>
