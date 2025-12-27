@@ -124,6 +124,13 @@ function SocialLFG:OnEvent(event, ...)
         if not self.db.minimapAngle then
             self.db.minimapAngle = 0
         end
+        -- Saved checkbox state (for UI restoration even when not registered)
+        if not self.db.savedCategories then
+            self.db.savedCategories = {}
+        end
+        if not self.db.savedRoles then
+            self.db.savedRoles = {}
+        end
         
         -- DEBUG: Dump saved data
         print("|cFF00FF00[SocialLFG] Database loaded:|r")
@@ -146,11 +153,33 @@ function SocialLFG:OnEvent(event, ...)
                 if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
                 if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
             end
+        else
+            -- Restore last selected checkboxes even if not registered
+            for _, cat in ipairs(self.db.savedCategories) do
+                if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
+                if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
+                if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+            end
+            for _, role in ipairs(self.db.savedRoles) do
+                if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
+                if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
+                if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
+            end
         end
         
         self:SendAddonMessage("QUERY", "GUILD")
         if #self.db.myStatus.categories > 0 then
             self:SendUpdate()
+        end
+        
+        -- Start periodic update timer every 15 seconds
+        if not self.updateTimer then
+            self.updateTimer = C_Timer.NewTicker(15, function()
+                if SocialLFG.frame:IsShown() then
+                    SocialLFG:SendAddonMessage("QUERY", "GUILD")
+                    SocialLFG:UpdateList()
+                end
+            end)
         end
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
@@ -254,6 +283,19 @@ function SocialLFG:UpdateButtonState()
     end
 end
 
+function SocialLFG:SaveCheckboxState()
+    local categories = {}
+    if SocialLFGRaidCheck:GetChecked() then table.insert(categories, "Raid") end
+    if SocialLFGMythicCheck:GetChecked() then table.insert(categories, "Mythic+") end
+    if SocialLFGQuestingCheck:GetChecked() then table.insert(categories, "Questing") end
+    local roles = {}
+    if SocialLFGTankCheck:GetChecked() then table.insert(roles, "Tank") end
+    if SocialLFGHealCheck:GetChecked() then table.insert(roles, "Heal") end
+    if SocialLFGDPSCheck:GetChecked() then table.insert(roles, "DPS") end
+    self.db.savedCategories = categories
+    self.db.savedRoles = roles
+end
+
 function SocialLFG:ToggleLFG()
     if #self.db.myStatus.categories > 0 then
         self:UnregisterLFG()
@@ -272,6 +314,8 @@ function SocialLFG:RegisterLFG()
     if SocialLFGHealCheck:GetChecked() then table.insert(roles, "Heal") end
     if SocialLFGDPSCheck:GetChecked() then table.insert(roles, "DPS") end
     self.db.myStatus = {categories = categories, roles = roles}
+    self.db.savedCategories = categories
+    self.db.savedRoles = roles
     print("|cFF00FF00[SocialLFG] Registered:|r Categories: " .. (table.concat(categories, ", ") or "(none)") .. " | Roles: " .. (table.concat(roles, ", ") or "(none)"))
     self:SendUpdate()
     self:UpdateButtonState()
@@ -325,9 +369,10 @@ function SocialLFG:OnShow()
         SocialLFGRegisterButton:Enable()
     else
         SocialLFGRegisterButton:SetText("Register LFG")
-        SocialLFGTankCheck:SetChecked(false)
-        SocialLFGHealCheck:SetChecked(false)
-        SocialLFGDPSCheck:SetChecked(false)
+        -- Restore saved roles instead of clearing them
+        SocialLFGTankCheck:SetChecked(tContains(self.db.savedRoles, "Tank"))
+        SocialLFGHealCheck:SetChecked(tContains(self.db.savedRoles, "Heal"))
+        SocialLFGDPSCheck:SetChecked(tContains(self.db.savedRoles, "DPS"))
         SocialLFGRegisterButton:Disable()
     end
     self:UpdateButtonState()
@@ -340,7 +385,15 @@ function SocialLFG:UpdateList()
     end
     wipe(self.listFrames)
     local previous = nil
+    local seen = {} -- Track seen players to avoid duplicates
+    
     local function AddEntry(player, status)
+        -- Skip duplicates
+        if seen[player] then
+            return
+        end
+        seen[player] = true
+        
         -- Skip entries with no categories
         if not status or #status.categories == 0 then
             return

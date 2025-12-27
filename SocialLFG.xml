@@ -45,7 +45,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGMythicCheck" inherits="UICheckButtonTemplate">
@@ -58,7 +58,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGQuestingCheck" inherits="UICheckButtonTemplate">
@@ -71,7 +71,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <!-- Role Checkboxes -->
@@ -85,7 +85,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGHealCheck" inherits="UICheckButtonTemplate">
@@ -98,7 +98,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGDPSCheck" inherits="UICheckButtonTemplate">
@@ -111,7 +111,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
 </Scripts>
 </CheckButton>
 <!-- Register/Unregister Button -->
