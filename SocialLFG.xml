@@ -139,6 +139,7 @@
 <Scripts>
 <OnLoad>SocialLFG:OnLoad()</OnLoad>
 <OnShow>SocialLFG:OnShow()</OnShow>
+<OnHide>SocialLFG:OnHide()</OnHide>
 <OnKeyDown>if key == "ESCAPE" then self:Hide(); return true; end</OnKeyDown>
 </Scripts>
 </Frame>

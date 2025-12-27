@@ -180,25 +180,6 @@ function SocialLFG:OnEvent(event, ...)
         if #self.db.myStatus.categories > 0 then
             self:SendUpdate()
         end
-        
-        -- Start periodic update timer every 15 seconds
-        if not self.updateTimer then
-            self.updateTimer = C_Timer.NewTicker(15, function()
-                if SocialLFG.frame:IsShown() then
-                    -- Query all guild members
-                    SocialLFG:SendAddonMessage("QUERY", "GUILD")
-                    -- Query all connected friends
-                    local numFriends = C_FriendList.GetNumFriends()
-                    for i = 1, numFriends do
-                        local info = C_FriendList.GetFriendInfo(i)
-                        if info.connected then
-                            SocialLFG:SendAddonMessage("QUERY", "WHISPER", info.name)
-                        end
-                    end
-                    SocialLFG:UpdateList()
-                end
-            end)
-        end
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix == PREFIX then
@@ -244,13 +225,30 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
     local cmd, arg1, arg2 = strsplit("|", message)
     if cmd == "STATUS" then
         local source = (channel == "GUILD") and "guild" or "friend"
-        self:UpdateStatus(sender, {categories = {strsplit(",", arg1)}, roles = {strsplit(",", arg2)}}, source)
+        -- Parse categories and roles, filtering out empty strings
+        local categories = {}
+        local roles = {}
+        if arg1 and arg1 ~= "" then
+            for cat in arg1:gmatch("[^,]+") do
+                table.insert(categories, cat)
+            end
+        end
+        if arg2 and arg2 ~= "" then
+            for role in arg2:gmatch("[^,]+") do
+                table.insert(roles, role)
+            end
+        end
+        -- Only update if there are actual categories
+        if #categories > 0 then
+            self:UpdateStatus(sender, {categories = categories, roles = roles}, source)
+        else
+            -- Remove if no categories
+            self:UpdateStatus(sender, nil, source)
+        end
     elseif cmd == "QUERY" then
+        -- Only respond if registered with actual categories
         if #self.db.myStatus.categories > 0 then
             self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
-        else
-            -- Send empty status to indicate we're unregistered
-            self:SendAddonMessage("STATUS||", "WHISPER", sender)
         end
     elseif cmd == "UNREGISTER" then
         local source = (channel == "GUILD") and "guild" or "friend"
@@ -259,23 +257,41 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
 end
 
 function SocialLFG:UpdateStatus(player, status, source)
+    local wasRegistered = false
+    
+    -- Check if player was registered
     if source == "guild" then
-        -- Remove if status is nil or has no categories
-        if status == nil or #status.categories == 0 then
+        wasRegistered = self.db.guildLFG[player] ~= nil
+    else
+        wasRegistered = self.db.friendsLFG[player] ~= nil
+    end
+    
+    -- Only store players who are actually registered (have categories)
+    if status == nil or #status.categories == 0 then
+        -- Remove from list if they're unregistered
+        if source == "guild" then
             self.db.guildLFG[player] = nil
         else
-            self.db.guildLFG[player] = status
+            self.db.friendsLFG[player] = nil
+        end
+        -- If they were registered and now unregistered, show message and update immediately
+        if wasRegistered then
+            print("|cFFFF9900[SocialLFG] " .. player .. " unregistered|r")
+            if self.frame:IsShown() then
+                self:UpdateList()
+            end
         end
     else
-        -- Remove if status is nil or has no categories
-        if status == nil or #status.categories == 0 then
-            self.db.friendsLFG[player] = nil
+        -- Only add if they have categories
+        if source == "guild" then
+            self.db.guildLFG[player] = status
         else
             self.db.friendsLFG[player] = status
         end
-    end
-    if self.frame:IsShown() then
-        self:UpdateList()
+        -- Always update list if window is open, even for removals
+        if self.frame:IsShown() then
+            self:UpdateList()
+        end
     end
 end
 
@@ -289,6 +305,9 @@ function SocialLFG:UpdateFriends()
         elseif not info.connected then
             self.db.queriedFriends[info.name] = nil
             self.db.friendsLFG[info.name] = nil
+            if self.frame:IsShown() then
+                self:UpdateList()
+            end
         end
     end
 end
@@ -385,6 +404,7 @@ function SocialLFG:UnregisterLFG()
         end
     end
     self:UpdateButtonState()
+    self:UpdateList()
 end
 
 function SocialLFG:SendUpdate()
@@ -434,6 +454,31 @@ function SocialLFG:OnShow()
     end
     self:UpdateButtonState()
     self:UpdateList()
+    
+    -- Start periodic update timer when window opens (every 5 seconds)
+    if not self.updateTimer then
+        self.updateTimer = C_Timer.NewTicker(5, function()
+            -- Query all guild members
+            SocialLFG:SendAddonMessage("QUERY", "GUILD")
+            -- Query all connected friends
+            local numFriends = C_FriendList.GetNumFriends()
+            for i = 1, numFriends do
+                local info = C_FriendList.GetFriendInfo(i)
+                if info.connected then
+                    SocialLFG:SendAddonMessage("QUERY", "WHISPER", info.name)
+                end
+            end
+            SocialLFG:UpdateList()
+        end)
+    end
+end
+
+function SocialLFG:OnHide()
+    -- Stop the periodic update timer when window closes
+    if self.updateTimer then
+        self.updateTimer:Cancel()
+        self.updateTimer = nil
+    end
 end
 
 function SocialLFG:UpdateList()
@@ -449,12 +494,13 @@ function SocialLFG:UpdateList()
         if seen[player] then
             return
         end
-        seen[player] = true
         
-        -- Skip entries with no categories
-        if not status or #status.categories == 0 then
+        -- Skip entries with no categories or invalid status
+        if not status or not status.categories or #status.categories == 0 then
             return
         end
+        
+        seen[player] = true
         local frame = CreateFrame("Frame", nil, SocialLFGScrollChild)
         frame:SetSize(500, 20)
         if previous then
