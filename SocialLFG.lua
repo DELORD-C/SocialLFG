@@ -95,14 +95,15 @@ function SocialLFG:OnEvent(event, ...)
             print("|cFFFF0000[SocialLFG] Creating new database|r")
             SocialLFGDB = {
                 myStatus = {categories = {}, roles = {}},
-                friendsLFG = {},
-                guildLFG = {},
                 queriedFriends = {},
                 minimapAngle = 0,
             }
         end
         self.db = SocialLFGDB
         self.listFrames = {}
+        
+        -- Single LFG members list (treats guild and friends the same)
+        self.lfgMembers = {}
         
         -- Ensure all required fields exist
         if not self.db.myStatus then
@@ -114,15 +115,6 @@ function SocialLFG:OnEvent(event, ...)
         if not self.db.myStatus.roles then
             self.db.myStatus.roles = {}
         end
-        if not self.db.friendsLFG then
-            self.db.friendsLFG = {}
-        end
-        if not self.db.guildLFG then
-            self.db.guildLFG = {}
-        end
-        -- Clear old list data on reload to get fresh data
-        wipe(self.db.guildLFG)
-        wipe(self.db.friendsLFG)
         if not self.db.queriedFriends then
             self.db.queriedFriends = {}
         end
@@ -145,8 +137,6 @@ function SocialLFG:OnEvent(event, ...)
         print("|cFF00FF00[SocialLFG] Database loaded:|r")
         print("  Categories: " .. (table.concat(self.db.myStatus.categories, ", ") or "(none)"))
         print("  Roles: " .. (table.concat(self.db.myStatus.roles, ", ") or "(none)"))
-        print("  Friends LFG: " .. tostring(#self.db.friendsLFG) .. " entries")
-        print("  Guild LFG: " .. tostring(#self.db.guildLFG) .. " entries")
         print("  Minimap angle: " .. tostring(self.db.minimapAngle))
         
         -- Restore checkbox states if registered
@@ -202,6 +192,8 @@ function SocialLFG:HandleGroupStatusChange(event)
             print("|cFFFF9900[SocialLFG] Temporarily unregistered while in a group|r")
             self:UnregisterLFG()
         end
+        -- Update button state to show "In a group"
+        self:UpdateButtonState()
     elseif event == "GROUP_LEFT" then
         -- Player left group - re-register if they were registered before
         if self.db.wasRegisteredBeforeGroup then
@@ -217,6 +209,9 @@ function SocialLFG:HandleGroupStatusChange(event)
                 self:OnShow()
             end
             self.db.wasRegisteredBeforeGroup = false
+        else
+            -- Even if not re-registering, update button state
+            self:UpdateButtonState()
         end
     end
 end
@@ -224,7 +219,6 @@ end
 function SocialLFG:HandleAddonMessage(message, sender, channel)
     local cmd, arg1, arg2 = strsplit("|", message)
     if cmd == "STATUS" then
-        local source = (channel == "GUILD") and "guild" or "friend"
         -- Parse categories and roles, filtering out empty strings
         local categories = {}
         local roles = {}
@@ -240,10 +234,10 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
         end
         -- Only update if there are actual categories
         if #categories > 0 then
-            self:UpdateStatus(sender, {categories = categories, roles = roles}, source)
+            self:UpdateStatus(sender, {categories = categories, roles = roles})
         else
             -- Remove if no categories
-            self:UpdateStatus(sender, nil, source)
+            self:UpdateStatus(sender, nil)
         end
     elseif cmd == "QUERY" then
         -- Only respond if registered with actual categories
@@ -251,48 +245,35 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
             self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
         end
     elseif cmd == "UNREGISTER" then
-        local source = (channel == "GUILD") and "guild" or "friend"
-        self:UpdateStatus(sender, nil, source)
+        self:UpdateStatus(sender, nil)
     end
 end
 
-function SocialLFG:UpdateStatus(player, status, source)
-    local wasRegistered = false
-    
-    -- Check if player was registered
-    if source == "guild" then
-        wasRegistered = self.db.guildLFG[player] ~= nil
-    else
-        wasRegistered = self.db.friendsLFG[player] ~= nil
-    end
-    
+function SocialLFG:UpdateStatus(player, status)
     -- Only store players who are actually registered (have categories)
-    if status == nil or #status.categories == 0 then
+    if status == nil or (status.categories and #status.categories == 0) then
         -- Remove from list if they're unregistered
-        if source == "guild" then
-            self.db.guildLFG[player] = nil
-        else
-            self.db.friendsLFG[player] = nil
-        end
-        -- If they were registered and now unregistered, show message and update immediately
+        local wasRegistered = self.lfgMembers[player] ~= nil
         if wasRegistered then
-            print("|cFFFF9900[SocialLFG] " .. player .. " unregistered|r")
-            if self.frame:IsShown() then
-                self:UpdateList()
-            end
+            self.lfgMembers[player] = nil
+            print("|cFFFF9900[SocialLFG] REMOVED: " .. player .. " | Remaining: " .. tostring(self:CountMembers()) .. "|r")
         end
-    else
+        -- Always update list to remove the unregistered player immediately
+        self:UpdateList()
+    elseif status and status.categories and #status.categories > 0 then
         -- Only add if they have categories
-        if source == "guild" then
-            self.db.guildLFG[player] = status
-        else
-            self.db.friendsLFG[player] = status
-        end
-        -- Always update list if window is open, even for removals
+        self.lfgMembers[player] = status
+        -- Always update list when adding members
         if self.frame:IsShown() then
             self:UpdateList()
         end
     end
+end
+
+function SocialLFG:CountMembers()
+    local count = 0
+    for _ in pairs(self.lfgMembers) do count = count + 1 end
+    return count
 end
 
 function SocialLFG:UpdateFriends()
@@ -304,7 +285,7 @@ function SocialLFG:UpdateFriends()
             self.db.queriedFriends[info.name] = true
         elseif not info.connected then
             self.db.queriedFriends[info.name] = nil
-            self.db.friendsLFG[info.name] = nil
+            self.lfgMembers[info.name] = nil
             if self.frame:IsShown() then
                 self:UpdateList()
             end
@@ -332,7 +313,14 @@ function SocialLFG:ToggleWindow()
 end
 
 function SocialLFG:UpdateButtonState()
-    if #self.db.myStatus.categories > 0 then
+    -- Check if player is in a group
+    local inGroup = IsInGroup()
+    
+    if inGroup then
+        -- Disable button when in a group
+        SocialLFGRegisterButton:SetText("In a group")
+        SocialLFGRegisterButton:Disable()
+    elseif #self.db.myStatus.categories > 0 then
         SocialLFGRegisterButton:SetText("Unregister")
         SocialLFGRegisterButton:Enable()
     else
@@ -482,25 +470,21 @@ function SocialLFG:OnHide()
 end
 
 function SocialLFG:UpdateList()
+    -- Properly destroy all old list frames
     for _, frame in ipairs(self.listFrames) do
         frame:Hide()
+        frame:SetParent(nil)
+        frame = nil
     end
     wipe(self.listFrames)
     local previous = nil
-    local seen = {} -- Track seen players to avoid duplicates
     
     local function AddEntry(player, status)
-        -- Skip duplicates
-        if seen[player] then
-            return
-        end
-        
         -- Skip entries with no categories or invalid status
         if not status or not status.categories or #status.categories == 0 then
             return
         end
         
-        seen[player] = true
         local frame = CreateFrame("Frame", nil, SocialLFGScrollChild)
         frame:SetSize(500, 20)
         if previous then
@@ -526,13 +510,11 @@ function SocialLFG:UpdateList()
         table.insert(self.listFrames, frame)
         previous = frame
     end
-    for player, status in pairs(self.db.guildLFG) do
+    for player, status in pairs(self.lfgMembers) do
         AddEntry(player, status)
     end
-    for player, status in pairs(self.db.friendsLFG) do
-        AddEntry(player, status)
-    end
-    SocialLFGScrollChild:SetHeight(#self.listFrames * 22)
+    -- Clear scroll child and reset height
+    SocialLFGScrollChild:SetHeight(math.max(1, #self.listFrames * 22))
     SocialLFGScrollFrame:UpdateScrollChildRect()
 end
 
