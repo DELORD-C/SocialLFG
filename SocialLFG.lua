@@ -20,12 +20,16 @@ local classRoles = {
 }
 
 function SocialLFG:OnLoad()
+    print("|cFFFF0000[SocialLFG] OnLoad called|r")
+    print("|cFFFF0000SocialLFGDB exists: " .. tostring(SocialLFGDB ~= nil) .. "|r")
+    
     self.frame = SocialLFGFrame
     self.frame:RegisterEvent("ADDON_LOADED")
     self.frame:RegisterEvent("CHAT_MSG_ADDON")
     self.frame:RegisterEvent("FRIENDLIST_UPDATE")
     self.frame:RegisterEvent("GUILD_ROSTER_UPDATE")
     self.frame:SetScript("OnEvent", function(self, event, ...) SocialLFG:OnEvent(event, ...) end)
+    self.frame:SetScript("OnShow", function() SocialLFG:OnShow() end)
     
     self.frame:SetMovable(true)
     self.frame:EnableMouse(true)
@@ -40,18 +44,6 @@ function SocialLFG:OnLoad()
     if not tContains(allowed, "Tank") then SocialLFGTankCheck:Disable() end
     if not tContains(allowed, "Heal") then SocialLFGHealCheck:Disable() end
     if not tContains(allowed, "DPS") then SocialLFGDPSCheck:Disable() end
-    
-    if not SocialLFGDB then
-        SocialLFGDB = {
-            myStatus = {categories = {}, roles = {}},
-            friendsLFG = {},
-            guildLFG = {},
-            queriedFriends = {},
-            minimapAngle = 0,
-        }
-    end
-    self.db = SocialLFGDB
-    self.listFrames = {}
     
     C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
     
@@ -88,12 +80,78 @@ function SocialLFG:OnLoad()
     end)
     self.minimapButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
     
-    self:UpdateMinimapPosition()
+    print("|cFFFF0000[SocialLFG] OnLoad initialization complete|r")
 end
 
 function SocialLFG:OnEvent(event, ...)
     if event == "ADDON_LOADED" and ... == "SocialLFG" then
+        print("|cFFFF0000[SocialLFG] ADDON_LOADED event fired|r")
+        print("|cFFFF0000SocialLFGDB exists: " .. tostring(SocialLFGDB ~= nil) .. "|r")
+        
+        -- Initialize database if it doesn't exist
+        if not SocialLFGDB then
+            print("|cFFFF0000[SocialLFG] Creating new database|r")
+            SocialLFGDB = {
+                myStatus = {categories = {}, roles = {}},
+                friendsLFG = {},
+                guildLFG = {},
+                queriedFriends = {},
+                minimapAngle = 0,
+            }
+        end
+        self.db = SocialLFGDB
+        self.listFrames = {}
+        
+        -- Ensure all required fields exist
+        if not self.db.myStatus then
+            self.db.myStatus = {categories = {}, roles = {}}
+        end
+        if not self.db.myStatus.categories then
+            self.db.myStatus.categories = {}
+        end
+        if not self.db.myStatus.roles then
+            self.db.myStatus.roles = {}
+        end
+        if not self.db.friendsLFG then
+            self.db.friendsLFG = {}
+        end
+        if not self.db.guildLFG then
+            self.db.guildLFG = {}
+        end
+        if not self.db.queriedFriends then
+            self.db.queriedFriends = {}
+        end
+        if not self.db.minimapAngle then
+            self.db.minimapAngle = 0
+        end
+        
+        -- DEBUG: Dump saved data
+        print("|cFF00FF00[SocialLFG] Database loaded:|r")
+        print("  Categories: " .. (table.concat(self.db.myStatus.categories, ", ") or "(none)"))
+        print("  Roles: " .. (table.concat(self.db.myStatus.roles, ", ") or "(none)"))
+        print("  Friends LFG: " .. tostring(#self.db.friendsLFG) .. " entries")
+        print("  Guild LFG: " .. tostring(#self.db.guildLFG) .. " entries")
+        print("  Minimap angle: " .. tostring(self.db.minimapAngle))
+        
+        -- Restore checkbox states if registered
+        if #self.db.myStatus.categories > 0 then
+            print("|cFF00FF00[SocialLFG] Restoring registration state...|r")
+            for _, cat in ipairs(self.db.myStatus.categories) do
+                if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
+                if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
+                if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+            end
+            for _, role in ipairs(self.db.myStatus.roles) do
+                if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
+                if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
+                if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
+            end
+        end
+        
         self:SendAddonMessage("QUERY", "GUILD")
+        if #self.db.myStatus.categories > 0 then
+            self:SendUpdate()
+        end
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix == PREFIX then
@@ -215,6 +273,7 @@ function SocialLFG:RegisterLFG()
     if SocialLFGHealCheck:GetChecked() then table.insert(roles, "Heal") end
     if SocialLFGDPSCheck:GetChecked() then table.insert(roles, "DPS") end
     self.db.myStatus = {categories = categories, roles = roles}
+    print("|cFF00FF00[SocialLFG] Registered:|r Categories: " .. (table.concat(categories, ", ") or "(none)") .. " | Roles: " .. (table.concat(roles, ", ") or "(none)"))
     self:SendUpdate()
     self:UpdateButtonState()
 end
@@ -261,20 +320,16 @@ end
 function SocialLFG:OnShow()
     if #self.db.myStatus.categories > 0 then
         SocialLFGRegisterButton:SetText("Unregister")
-        SocialLFGRaidCheck:SetChecked(tContains(self.db.myStatus.categories, "Raid"))
-        SocialLFGMythicCheck:SetChecked(tContains(self.db.myStatus.categories, "Mythic+"))
-        SocialLFGQuestingCheck:SetChecked(tContains(self.db.myStatus.categories, "Questing"))
         SocialLFGTankCheck:SetChecked(tContains(self.db.myStatus.roles, "Tank"))
         SocialLFGHealCheck:SetChecked(tContains(self.db.myStatus.roles, "Heal"))
         SocialLFGDPSCheck:SetChecked(tContains(self.db.myStatus.roles, "DPS"))
+        SocialLFGRegisterButton:Enable()
     else
         SocialLFGRegisterButton:SetText("Register LFG")
-        SocialLFGRaidCheck:SetChecked(false)
-        SocialLFGMythicCheck:SetChecked(false)
-        SocialLFGQuestingCheck:SetChecked(false)
         SocialLFGTankCheck:SetChecked(false)
         SocialLFGHealCheck:SetChecked(false)
         SocialLFGDPSCheck:SetChecked(false)
+        SocialLFGRegisterButton:Disable()
     end
     self:UpdateButtonState()
     self:UpdateList()
@@ -308,7 +363,7 @@ function SocialLFG:UpdateList()
         inviteBtn:SetSize(60, 20)
         inviteBtn:SetPoint("RIGHT", 0, 0)
         inviteBtn:SetText("Invite")
-        inviteBtn:SetScript("OnClick", function() InviteUnit(player) end)
+        inviteBtn:SetScript("OnClick", function() C_PartyInfo.InviteUnit(player) end)
         table.insert(self.listFrames, frame)
         previous = frame
     end

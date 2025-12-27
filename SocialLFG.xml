@@ -26,6 +26,14 @@
 <Button name="SocialLFGCloseButton" inherits="UIPanelCloseButton">
 <Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGFrame" x="-5" y="-5"/></Anchors>
 </Button>
+<!-- Reload Button -->
+<Button name="SocialLFGReloadButton" inherits="UIPanelButtonTemplate" text="Reload">
+<Size x="60" y="22"/>
+<Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGCloseButton" relativePoint="TOPLEFT" x="-5" y="0"/></Anchors>
+<Scripts>
+<OnClick>ReloadUI()</OnClick>
+</Scripts>
+</Button>
 <!-- Category Checkboxes -->
 <CheckButton name="SocialLFGRaidCheck" inherits="UICheckButtonTemplate">
 <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-40"/></Anchors>
