@@ -82,6 +82,9 @@ function SocialLFG:OnLoad()
     end)
     self.minimapButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
     
+    -- Register frame with UISpecialFrames for Escape key handling
+    table.insert(UISpecialFrames, "SocialLFGFrame")
+    
     print("|cFFFF0000[SocialLFG] OnLoad initialization complete|r")
 end
 
@@ -104,6 +107,12 @@ function SocialLFG:OnEvent(event, ...)
         
         -- Single LFG members list (treats guild and friends the same)
         self.lfgMembers = {}
+        
+        -- Track when we last saw each player (for timeout detection)
+        self.lastSeen = {}
+        
+        -- Timeout period in seconds (remove players not seen for this long)
+        self.TIMEOUT = 60
         
         -- Ensure all required fields exist
         if not self.db.myStatus then
@@ -219,6 +228,9 @@ end
 function SocialLFG:HandleAddonMessage(message, sender, channel)
     local cmd, arg1, arg2 = strsplit("|", message)
     if cmd == "STATUS" then
+        -- Update last seen timestamp
+        self.lastSeen[sender] = GetTime()
+        
         -- Parse categories and roles, filtering out empty strings
         local categories = {}
         local roles = {}
@@ -256,6 +268,7 @@ function SocialLFG:UpdateStatus(player, status)
         local wasRegistered = self.lfgMembers[player] ~= nil
         if wasRegistered then
             self.lfgMembers[player] = nil
+            self.lastSeen[player] = nil
             print("|cFFFF9900[SocialLFG] REMOVED: " .. player .. " | Remaining: " .. tostring(self:CountMembers()) .. "|r")
         end
         -- Always update list to remove the unregistered player immediately
@@ -270,6 +283,25 @@ function SocialLFG:UpdateStatus(player, status)
     end
 end
 
+function SocialLFG:CheckTimeouts()
+    local currentTime = GetTime()
+    local removed = false
+    
+    for player, lastTime in pairs(self.lastSeen) do
+        if currentTime - lastTime > self.TIMEOUT then
+            -- Player timed out, remove them
+            self.lfgMembers[player] = nil
+            self.lastSeen[player] = nil
+            print("|cFFFF9900[SocialLFG] TIMEOUT: " .. player .. " (no response for " .. self.TIMEOUT .. "s) | Remaining: " .. tostring(self:CountMembers()) .. "|r")
+            removed = true
+        end
+    end
+    
+    if removed and self.frame:IsShown() then
+        self:UpdateList()
+    end
+end
+
 function SocialLFG:CountMembers()
     local count = 0
     for _ in pairs(self.lfgMembers) do count = count + 1 end
@@ -280,6 +312,7 @@ function SocialLFG:UpdateFriends()
     local numFriends = C_FriendList.GetNumFriends()
     for i = 1, numFriends do
         local info = C_FriendList.GetFriendInfo(i)
+        if not info then return end  -- Skip if info is nil
         if info.connected and not self.db.queriedFriends[info.name] then
             self:SendAddonMessage("QUERY", "WHISPER", info.name)
             self.db.queriedFriends[info.name] = true
@@ -452,10 +485,12 @@ function SocialLFG:OnShow()
             local numFriends = C_FriendList.GetNumFriends()
             for i = 1, numFriends do
                 local info = C_FriendList.GetFriendInfo(i)
-                if info.connected then
+                if info and info.connected then
                     SocialLFG:SendAddonMessage("QUERY", "WHISPER", info.name)
                 end
             end
+            -- Check for timeouts and update list
+            SocialLFG:CheckTimeouts()
             SocialLFG:UpdateList()
         end)
     end
@@ -478,10 +513,16 @@ function SocialLFG:UpdateList()
     end
     wipe(self.listFrames)
     local previous = nil
+    local playerName = UnitName("player")
     
     local function AddEntry(player, status)
         -- Skip entries with no categories or invalid status
         if not status or not status.categories or #status.categories == 0 then
+            return
+        end
+        
+        -- Skip self player
+        if player == playerName then
             return
         end
         

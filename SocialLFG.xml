@@ -45,7 +45,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); if SocialLFG.db and #SocialLFG.db.myStatus.categories > 0 then SocialLFG:RegisterLFG() else SocialLFG:UpdateButtonState() end</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGMythicCheck" inherits="UICheckButtonTemplate">
@@ -58,7 +58,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); if SocialLFG.db and #SocialLFG.db.myStatus.categories > 0 then SocialLFG:RegisterLFG() else SocialLFG:UpdateButtonState() end</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGQuestingCheck" inherits="UICheckButtonTemplate">
@@ -71,7 +71,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); if SocialLFG.db and #SocialLFG.db.myStatus.categories > 0 then SocialLFG:RegisterLFG() else SocialLFG:UpdateButtonState() end</OnClick>
 </Scripts>
 </CheckButton>
 <!-- Role Checkboxes -->
@@ -85,7 +85,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); if SocialLFG.db and #SocialLFG.db.myStatus.categories > 0 then SocialLFG:RegisterLFG() else SocialLFG:UpdateButtonState() end</OnClick>
 </Scripts>
 </CheckButton>
 <CheckButton name="SocialLFGHealCheck" inherits="UICheckButtonTemplate">
@@ -111,7 +111,7 @@
 </Layer>
 </Layers>
 <Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
+<OnClick>SocialLFG:SaveCheckboxState(); if SocialLFG.db and #SocialLFG.db.myStatus.categories > 0 then SocialLFG:RegisterLFG() else SocialLFG:UpdateButtonState() end</OnClick>
 </Scripts>
 </CheckButton>
 <!-- Register/Unregister Button -->
@@ -140,7 +140,6 @@
 <OnLoad>SocialLFG:OnLoad()</OnLoad>
 <OnShow>SocialLFG:OnShow()</OnShow>
 <OnHide>SocialLFG:OnHide()</OnHide>
-<OnKeyDown>if key == "ESCAPE" then self:Hide(); return true; end</OnKeyDown>
 </Scripts>
 </Frame>
 </Ui>
