@@ -1,5 +1,4 @@
 local addonName = "SocialLFG"
-local addon = SocialLFG
 
 -- Check if libraries are available
 local ldb = LibStub:GetLibrary("LibDataBroker-1.1", true)
@@ -16,6 +15,8 @@ local plugin = ldb:NewDataObject(addonName, {
 
 -- Click handler for the minimap button
 function plugin.OnClick(self, button)
+    if not SocialLFG then return end
+    
     if button == "RightButton" then
         -- Right click to toggle registration
         SocialLFG:ToggleLFG()
@@ -28,6 +29,12 @@ end
 -- Tooltip display
 function plugin.OnTooltipShow(tt)
     tt:AddLine("Social LFG")
+    
+    -- Check if SocialLFG and its database are initialized
+    if not SocialLFG or not SocialLFG.db then
+        tt:AddLine("|cFFFF9900Loading...|r", 1, 1, 1)
+        return
+    end
     
     if #SocialLFG.db.myStatus.categories > 0 then
         tt:AddLine("|cFF00FF00Registered|r", 1, 1, 1)

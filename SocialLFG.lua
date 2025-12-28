@@ -1,22 +1,31 @@
 SocialLFG = {}
-
 local PREFIX = "SocialLFG"
 
--- Logging utilities
-function SocialLFG:LogDebug(msg)
-    print("|cFFFF0000[SocialLFG]|r " .. msg)
+-- Constants
+local CONSTANTS = {
+    TIMEOUT = 60,
+    QUERY_INTERVAL = 5,
+    ROW_HEIGHT = 24,
+    ROLE_ICON_SIZE = 12,
+    CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon"},
+    ROLES = {"Tank", "Heal", "DPS"},
+}
+
+-- Logging utilities with consistent formatting
+local function Log(level, msg)
+    local colorMap = {
+        DEBUG = "|cFFFF0000",
+        INFO = "|cFF00FF00",
+        WARN = "|cFFFF9900",
+    }
+    print((colorMap[level] or "|cFFFFFFFF") .. "[SocialLFG]|r " .. msg)
 end
 
-function SocialLFG:LogInfo(msg)
-    print("|cFF00FF00[SocialLFG]|r " .. msg)
-end
-
-function SocialLFG:LogWarn(msg)
-    print("|cFFFF9900[SocialLFG]|r " .. msg)
-end
-local categories = {"Raid", "Mythic+", "Questing", "Dungeon"}
-local roles = {"Tank", "Heal", "DPS"}
-local classRoles = {
+function SocialLFG:LogDebug(msg) Log("DEBUG", msg) end
+function SocialLFG:LogInfo(msg) Log("INFO", msg) end
+function SocialLFG:LogWarn(msg) Log("WARN", msg) end
+-- Class role mapping
+local CLASS_ROLES = {
     ["WARRIOR"] = {"Tank", "DPS"},
     ["PALADIN"] = {"Tank", "Heal", "DPS"},
     ["HUNTER"] = {"DPS"},
@@ -34,18 +43,29 @@ local classRoles = {
 
 function SocialLFG:OnLoad()
     self:LogDebug("OnLoad called")
-    self:LogDebug("SocialLFGDB exists: " .. tostring(SocialLFGDB ~= nil))
     
     self.frame = SocialLFGFrame
+    self:RegisterFrameEvents()
+    self:ConfigureFrameProperties()
+    self:RestrictRolesByClass()
+    self:RegisterAddonMessagePrefix()
+    self:RegisterSpecialFrames()
+    
+    self:LogDebug("OnLoad initialization complete")
+end
+
+function SocialLFG:RegisterFrameEvents()
     self.frame:RegisterEvent("ADDON_LOADED")
     self.frame:RegisterEvent("CHAT_MSG_ADDON")
     self.frame:RegisterEvent("FRIENDLIST_UPDATE")
     self.frame:RegisterEvent("GUILD_ROSTER_UPDATE")
     self.frame:RegisterEvent("GROUP_FORMED")
     self.frame:RegisterEvent("GROUP_LEFT")
-    self.frame:SetScript("OnEvent", function(self, event, ...) SocialLFG:OnEvent(event, ...) end)
+    self.frame:SetScript("OnEvent", function(_, event, ...) SocialLFG:OnEvent(event, ...) end)
     self.frame:SetScript("OnShow", function() SocialLFG:OnShow() end)
-    
+end
+
+function SocialLFG:ConfigureFrameProperties()
     self.frame:SetMovable(true)
     self.frame:EnableMouse(true)
     self.frame:RegisterForDrag("LeftButton")
@@ -53,103 +73,27 @@ function SocialLFG:OnLoad()
     self.frame:SetScript("OnDragStop", self.frame.StopMovingOrSizing)
     self.frame:SetFrameStrata("DIALOG")
     self.frame:SetFrameLevel(100)
-    
+end
+
+function SocialLFG:RestrictRolesByClass()
     local _, class = UnitClass("player")
-    local allowed = classRoles[class] or roles
-    if not tContains(allowed, "Tank") then SocialLFGTankCheck:Disable() end
-    if not tContains(allowed, "Heal") then SocialLFGHealCheck:Disable() end
-    if not tContains(allowed, "DPS") then SocialLFGDPSCheck:Disable() end
-    
+    local allowedRoles = CLASS_ROLES[class] or CONSTANTS.ROLES
+    if not tContains(allowedRoles, "Tank") then SocialLFGTankCheck:Disable() end
+    if not tContains(allowedRoles, "Heal") then SocialLFGHealCheck:Disable() end
+    if not tContains(allowedRoles, "DPS") then SocialLFGDPSCheck:Disable() end
+end
+
+function SocialLFG:RegisterAddonMessagePrefix()
     C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
-    
-    -- Register frame with UISpecialFrames for Escape key handling
+end
+
+function SocialLFG:RegisterSpecialFrames()
     table.insert(UISpecialFrames, "SocialLFGFrame")
-    
-    self:LogDebug("OnLoad initialization complete")
 end
 
 function SocialLFG:OnEvent(event, ...)
     if event == "ADDON_LOADED" and ... == "SocialLFG" then
-        self:LogDebug("ADDON_LOADED event fired")
-        self:LogDebug("SocialLFGDB exists: " .. tostring(SocialLFGDB ~= nil))
-        
-        -- Initialize database if it doesn't exist
-        if not SocialLFGDB then
-            self:LogDebug("Creating new database")
-            SocialLFGDB = {
-                myStatus = {categories = {}, roles = {}},
-                queriedFriends = {},
-            }
-        end
-        self.db = SocialLFGDB
-        self.listFrames = {}
-        
-        -- Single LFG members list (treats guild and friends the same)
-        self.lfgMembers = {}
-        
-        -- Track when we last saw each player (for timeout detection)
-        self.lastSeen = {}
-        
-        -- Timeout period in seconds (remove players not seen for this long)
-        self.TIMEOUT = 60
-        
-        -- Ensure all required fields exist
-        if not self.db.myStatus then
-            self.db.myStatus = {categories = {}, roles = {}}
-        end
-        if not self.db.myStatus.categories then
-            self.db.myStatus.categories = {}
-        end
-        if not self.db.myStatus.roles then
-            self.db.myStatus.roles = {}
-        end
-        if not self.db.queriedFriends then
-            self.db.queriedFriends = {}
-        end
-        -- Saved checkbox state (for UI restoration even when not registered)
-        if not self.db.savedCategories then
-            self.db.savedCategories = {}
-        end
-        if not self.db.savedRoles then
-            self.db.savedRoles = {}
-        end
-        -- Track if player was registered before joining a group
-        if not self.db.wasRegisteredBeforeGroup then
-            self.db.wasRegisteredBeforeGroup = false
-        end
-        
-        -- DEBUG: Dump saved data
-        self:LogInfo("Database loaded:")
-        self:LogInfo("  Categories: " .. (table.concat(self.db.myStatus.categories, ", ") or "(none)"))
-        self:LogInfo("  Roles: " .. (table.concat(self.db.myStatus.roles, ", ") or "(none)"))
-        
-        -- Restore checkbox states if registered
-        if #self.db.myStatus.categories > 0 then
-            self:LogInfo("Restoring registration state...")
-            for _, cat in ipairs(self.db.myStatus.categories) do
-                if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
-                if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
-                if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
-            end
-            for _, role in ipairs(self.db.myStatus.roles) do
-                if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
-                if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
-                if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
-            end
-        else
-            -- Restore last selected checkboxes even if not registered
-            for _, cat in ipairs(self.db.savedCategories) do
-                if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
-                if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
-                if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
-            end
-            for _, role in ipairs(self.db.savedRoles) do
-                if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
-                if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
-                if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
-            end
-        end
-        
+        self:InitializeDatabase()
         self:SendAddonMessage("QUERY", "GUILD")
         if #self.db.myStatus.categories > 0 then
             self:SendUpdate()
@@ -162,9 +106,88 @@ function SocialLFG:OnEvent(event, ...)
     elseif event == "FRIENDLIST_UPDATE" then
         self:UpdateFriends()
     elseif event == "GUILD_ROSTER_UPDATE" then
-        -- Optional: query guild if needed
+        -- Guild roster updated
     elseif event == "GROUP_FORMED" or event == "GROUP_LEFT" then
         self:HandleGroupStatusChange(event)
+    end
+end
+
+function SocialLFG:InitializeDatabase()
+    self:LogDebug("ADDON_LOADED event fired")
+    
+    if not SocialLFGDB then
+        self:LogDebug("Creating new database")
+        SocialLFGDB = {
+            myStatus = {categories = {}, roles = {}},
+            queriedFriends = {},
+        }
+    end
+    
+    self.db = SocialLFGDB
+    self.listFrames = {}
+    self.lfgMembers = {}
+    self.lastSeen = {}
+    self.TIMEOUT = CONSTANTS.TIMEOUT
+    
+    self:EnsureDatabaseFields()
+    self:LogDatabaseStatus()
+    self:RestoreCheckboxStates()
+end
+
+function SocialLFG:EnsureDatabaseFields()
+    if not self.db.myStatus then
+        self.db.myStatus = {categories = {}, roles = {}}
+    end
+    if not self.db.myStatus.categories then
+        self.db.myStatus.categories = {}
+    end
+    if not self.db.myStatus.roles then
+        self.db.myStatus.roles = {}
+    end
+    if not self.db.queriedFriends then
+        self.db.queriedFriends = {}
+    end
+    if not self.db.savedCategories then
+        self.db.savedCategories = {}
+    end
+    if not self.db.savedRoles then
+        self.db.savedRoles = {}
+    end
+    if not self.db.wasRegisteredBeforeGroup then
+        self.db.wasRegisteredBeforeGroup = false
+    end
+end
+
+function SocialLFG:LogDatabaseStatus()
+    self:LogInfo("Database loaded:")
+    self:LogInfo("  Categories: " .. (table.concat(self.db.myStatus.categories, ", ") or "(none)"))
+    self:LogInfo("  Roles: " .. (table.concat(self.db.myStatus.roles, ", ") or "(none)"))
+end
+
+function SocialLFG:RestoreCheckboxStates()
+    if #self.db.myStatus.categories > 0 then
+        self:LogInfo("Restoring registration state...")
+        for _, cat in ipairs(self.db.myStatus.categories) do
+            if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
+            if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
+            if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+        end
+        for _, role in ipairs(self.db.myStatus.roles) do
+            if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
+            if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
+            if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
+        end
+    else
+        for _, cat in ipairs(self.db.savedCategories) do
+            if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
+            if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
+            if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+        end
+        for _, role in ipairs(self.db.savedRoles) do
+            if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
+            if role == "Heal" then SocialLFGHealCheck:SetChecked(true) end
+            if role == "DPS" then SocialLFGDPSCheck:SetChecked(true) end
+        end
     end
 end
 
@@ -202,59 +225,72 @@ end
 
 function SocialLFG:HandleAddonMessage(message, sender, channel)
     local cmd, arg1, arg2 = strsplit("|", message)
+    
     if cmd == "STATUS" then
-        -- Update last seen timestamp
-        self.lastSeen[sender] = GetTime()
-        
-        -- Parse categories and roles, filtering out empty strings
-        local categories = {}
-        local roles = {}
-        if arg1 and arg1 ~= "" then
-            for cat in arg1:gmatch("[^,]+") do
-                table.insert(categories, cat)
-            end
-        end
-        if arg2 and arg2 ~= "" then
-            for role in arg2:gmatch("[^,]+") do
-                table.insert(roles, role)
-            end
-        end
-        -- Only update if there are actual categories
-        if #categories > 0 then
-            self:UpdateStatus(sender, {categories = categories, roles = roles})
-        else
-            -- Remove if no categories
-            self:UpdateStatus(sender, nil)
-        end
+        self:HandleStatusMessage(sender, arg1, arg2)
     elseif cmd == "QUERY" then
-        -- Only respond if registered with actual categories
-        if #self.db.myStatus.categories > 0 then
-            self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
-        end
+        self:HandleQueryMessage(sender)
     elseif cmd == "UNREGISTER" then
         self:UpdateStatus(sender, nil)
     end
 end
 
+function SocialLFG:HandleStatusMessage(sender, arg1, arg2)
+    self.lastSeen[sender] = GetTime()
+    
+    local categories = self:ParseCategories(arg1)
+    local roles = self:ParseRoles(arg2)
+    
+    if #categories > 0 then
+        self:UpdateStatus(sender, {categories = categories, roles = roles})
+    else
+        self:UpdateStatus(sender, nil)
+    end
+end
+
+function SocialLFG:ParseCategories(categoryString)
+    local categories = {}
+    if categoryString and categoryString ~= "" then
+        for cat in categoryString:gmatch("[^,]+") do
+            table.insert(categories, cat)
+        end
+    end
+    return categories
+end
+
+function SocialLFG:ParseRoles(roleString)
+    local roles = {}
+    if roleString and roleString ~= "" then
+        for role in roleString:gmatch("[^,]+") do
+            table.insert(roles, role)
+        end
+    end
+    return roles
+end
+
+function SocialLFG:HandleQueryMessage(sender)
+    if #self.db.myStatus.categories > 0 then
+        self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
+    end
+end
+
 function SocialLFG:UpdateStatus(player, status)
-    -- Only store players who are actually registered (have categories)
     if status == nil or (status.categories and #status.categories == 0) then
-        -- Remove from list if they're unregistered
-        local wasRegistered = self.lfgMembers[player] ~= nil
-        if wasRegistered then
+        if self.lfgMembers[player] ~= nil then
             self.lfgMembers[player] = nil
             self.lastSeen[player] = nil
-            self:LogWarn("REMOVED: " .. player .. " | Remaining: " .. tostring(self:CountMembers()))
+            self:LogWarn("REMOVED: " .. player .. " | Remaining: " .. self:CountMembers())
         end
-        -- Always update list to remove the unregistered player immediately
-        self:UpdateList()
+        self:UpdateListIfShown()
     elseif status and status.categories and #status.categories > 0 then
-        -- Only add if they have categories
         self.lfgMembers[player] = status
-        -- Always update list when adding members
-        if self.frame:IsShown() then
-            self:UpdateList()
-        end
+        self:UpdateListIfShown()
+    end
+end
+
+function SocialLFG:UpdateListIfShown()
+    if self.frame:IsShown() then
+        self:UpdateList()
     end
 end
 
@@ -287,16 +323,17 @@ function SocialLFG:UpdateFriends()
     local numFriends = C_FriendList.GetNumFriends()
     for i = 1, numFriends do
         local info = C_FriendList.GetFriendInfo(i)
-        if not info then return end  -- Skip if info is nil
-        if info.connected and not self.db.queriedFriends[info.name] then
-            self:SendAddonMessage("QUERY", "WHISPER", info.name)
-            self.db.queriedFriends[info.name] = true
-        elseif not info.connected then
+        if not info then return end
+        
+        if info.connected then
+            if not self.db.queriedFriends[info.name] then
+                self:SendAddonMessage("QUERY", "WHISPER", info.name)
+                self.db.queriedFriends[info.name] = true
+            end
+        else
             self.db.queriedFriends[info.name] = nil
             self.lfgMembers[info.name] = nil
-            if self.frame:IsShown() then
-                self:UpdateList()
-            end
+            self:UpdateListIfShown()
         end
     end
 end
@@ -417,6 +454,13 @@ function SocialLFG:SetCheckboxesFromCategories(categories)
 end
 
 function SocialLFG:OnShow()
+    self:RestoreUIState()
+    self:UpdateButtonState()
+    self:UpdateList()
+    self:StartPeriodicUpdates()
+end
+
+function SocialLFG:RestoreUIState()
     if #self.db.myStatus.categories > 0 then
         SocialLFGRegisterButton:SetText("Unregister")
         self:SetCheckboxesFromRoles(self.db.myStatus.roles)
@@ -424,210 +468,142 @@ function SocialLFG:OnShow()
         SocialLFGRegisterButton:Enable()
     else
         SocialLFGRegisterButton:SetText("Register LFG")
-        -- Restore saved roles instead of clearing them
         self:SetCheckboxesFromRoles(self.db.savedRoles)
         self:SetCheckboxesFromCategories(self.db.savedCategories)
         SocialLFGRegisterButton:Disable()
     end
-    self:UpdateButtonState()
-    self:UpdateList()
-    
-    -- Start periodic update timer when window opens (every 5 seconds)
+end
+
+function SocialLFG:StartPeriodicUpdates()
     if not self.updateTimer then
-        self.updateTimer = C_Timer.NewTicker(5, function()
-            -- Query all guild members
-            SocialLFG:SendAddonMessage("QUERY", "GUILD")
-            -- Query all connected friends
-            local numFriends = C_FriendList.GetNumFriends()
-            for i = 1, numFriends do
-                local info = C_FriendList.GetFriendInfo(i)
-                if info and info.connected then
-                    SocialLFG:SendAddonMessage("QUERY", "WHISPER", info.name)
-                end
-            end
-            -- Check for timeouts and update list
-            SocialLFG:CheckTimeouts()
-            SocialLFG:UpdateList()
+        self.updateTimer = C_Timer.NewTicker(CONSTANTS.QUERY_INTERVAL, function()
+            self:QueryAllPlayers()
+            self:CheckTimeouts()
+            self:UpdateList()
         end)
     end
 end
 
--- Initialize stats cache
-if not SocialLFG.statsCache then
-    SocialLFG.statsCache = {}
-end
-
--- Cache duration in seconds (300 = 5 minutes)
-SocialLFG.STATS_CACHE_DURATION = 300
-
-function SocialLFG:GetCachedStats(playerName)
-    if not playerName then return nil end
-    
-    local cached = self.statsCache[playerName]
-    if cached and (GetTime() - cached.timestamp) < self.STATS_CACHE_DURATION then
-        return cached.stats
-    end
-    return nil
-end
-
-function SocialLFG:CacheStats(playerName, stats)
-    if not playerName or not stats then return end
-    self.statsCache[playerName] = {
-        stats = stats,
-        timestamp = GetTime()
-    }
-end
-
-function SocialLFG:GetPlayerStats(playerName)
-    if not playerName then
-        return {ilvl = "N/A", rio = "N/A"}
-    end
-    
-    -- Check cache first
-    local cachedStats = self:GetCachedStats(playerName)
-    if cachedStats then
-        return cachedStats
-    end
-    
-    local stats = {
-        ilvl = "N/A",
-        rio = "N/A"
-    }
-    
-    -- Try to get RaiderIO score first (most reliable)
-    if RaiderIO then
-        local success, profile = pcall(function()
-            return RaiderIO.GetProfile(playerName)
-        end)
-        
-        if success and profile then
-            -- Get M+ score if available
-            if profile.mythicPlusScore and profile.mythicPlusScore > 0 then
-                stats.rio = tostring(math.floor(profile.mythicPlusScore))
-            elseif profile.raidProgression then
-                stats.rio = "Raider"
-            end
-            
-            -- Get item level from profile if available
-            if profile.gearLevel and profile.gearLevel > 0 then
-                stats.ilvl = tostring(profile.gearLevel)
-            end
+function SocialLFG:QueryAllPlayers()
+    self:SendAddonMessage("QUERY", "GUILD")
+    local numFriends = C_FriendList.GetNumFriends()
+    for i = 1, numFriends do
+        local info = C_FriendList.GetFriendInfo(i)
+        if info and info.connected then
+            self:SendAddonMessage("QUERY", "WHISPER", info.name)
         end
     end
-    
-    -- Try Blizzard API for item level as fallback
-    if stats.ilvl == "N/A" then
-        local success, ilvl = pcall(function()
-            if C_Armory and C_Armory.GetCharacterGearSummary then
-                return C_Armory.GetCharacterGearSummary(playerName)
-            end
-            return nil
-        end)
-        
-        if success and ilvl then
-            stats.ilvl = tostring(ilvl)
-        end
-    end
-    
-    -- Cache the result
-    self:CacheStats(playerName, stats)
-    return stats
+end
+
+
+
+function SocialLFG:GetRoleAtlas(role)
+    -- Return atlas names for role icons (Dragonflight/TWW compatible)
+    local ROLE_ATLASES = {
+        ["Tank"] = "roleicon-tiny-tank",
+        ["Heal"] = "roleicon-tiny-healer",
+        ["DPS"] = "roleicon-tiny-dps",
+    }
+    return ROLE_ATLASES[role] or "roleicon-tiny-dps"
 end
 
 function SocialLFG:UpdateList()
-    -- Properly destroy all old list frames
+    self:DestroyListFrames()
+    
+    local playerName = UnitName("player")
+    local rowIndex = 0
+    local sortedPlayers = self:GetSortedPlayers()
+    
+    for _, player in ipairs(sortedPlayers) do
+        if self.lfgMembers[player] then
+            self:CreateListRow(player, self.lfgMembers[player], rowIndex, playerName)
+            rowIndex = rowIndex + 1
+        end
+    end
+    
+    -- Update scroll frame height
+    local childHeight = rowIndex * CONSTANTS.ROW_HEIGHT
+    SocialLFGScrollChild:SetHeight(math.max(1, childHeight))
+    SocialLFGScrollFrame:UpdateScrollChildRect()
+end
+
+function SocialLFG:DestroyListFrames()
     for _, frame in ipairs(self.listFrames) do
         frame:Hide()
+        frame:ClearAllPoints()
         frame:SetParent(nil)
-        frame = nil
     end
     wipe(self.listFrames)
-    local previous = nil
-    local playerName = UnitName("player")
+end
+
+function SocialLFG:GetSortedPlayers()
+    local sortedPlayers = {}
+    for player in pairs(self.lfgMembers) do
+        table.insert(sortedPlayers, player)
+    end
+    table.sort(sortedPlayers)
+    return sortedPlayers
+end
+
+function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
+    local rowFrame = CreateFrame("Frame", nil, SocialLFGScrollChild)
+    rowFrame:SetHeight(CONSTANTS.ROW_HEIGHT)
+    rowFrame:SetWidth(500)
     
-    local function AddEntry(player, status)
-        -- Skip entries with no categories or invalid status
-        if not status or not status.categories or #status.categories == 0 then
-            return
-        end
-        
-        -- Skip self player
-        if player == playerName then
-            return
-        end
-        
-        local frame = CreateFrame("Frame", nil, SocialLFGScrollChild)
-        frame:SetSize(500, 20)
-        if previous then
-            frame:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
-        else
-            frame:SetPoint("TOPLEFT", SocialLFGScrollChild, "TOPLEFT", 0, 0)
-        end
-        
-        -- Create clickable name text with stats on hover
-        local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        nameText:SetPoint("LEFT", 0, 0)
-        local displayText = player .. 
-            " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ")"
-        nameText:SetText(displayText)
-        
-        -- Create a hover frame for tooltip functionality
-        local hoverFrame = CreateFrame("Frame", nil, frame)
-        hoverFrame:SetSize(300, 20)
-        hoverFrame:SetPoint("LEFT", 0, 0)
-        hoverFrame:EnableMouse(true)
-        
-        -- Store player name for tooltip retrieval
-        hoverFrame.playerName = player
-        hoverFrame.categories = status.categories
-        hoverFrame.roles = status.roles
-        
-        -- Add tooltip on hover
-        hoverFrame:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(hoverFrame, "ANCHOR_RIGHT")
-            GameTooltip:AddLine(self.playerName, 1, 1, 1)
-            GameTooltip:AddLine(" ")
-            
-            -- Get player stats
-            local stats = SocialLFG:GetPlayerStats(self.playerName)
-            
-            -- Display categories and roles
-            GameTooltip:AddLine("LFG: " .. table.concat(self.categories, ", "), 0.7, 0.7, 0.7)
-            GameTooltip:AddLine("Roles: " .. table.concat(self.roles, ", "), 0.7, 0.7, 0.7)
-            GameTooltip:AddLine(" ")
-            
-            -- Display stats with color coding
-            local ilvlColor = stats.ilvl == "N/A" and "|cFFFF0000" or "|cFF0FFF0F"
-            local rioColor = stats.rio == "N/A" and "|cFFFF0000" or "|cFF0FFF0F"
-            
-            GameTooltip:AddLine("Item Level: " .. ilvlColor .. stats.ilvl .. "|r", 1, 1, 1)
-            GameTooltip:AddLine("Raider IO: " .. rioColor .. stats.rio .. "|r", 1, 1, 1)
-            
-            GameTooltip:Show()
-        end)
-        
-        hoverFrame:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-        
-        -- Create invite button
-        local inviteBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        inviteBtn:SetSize(60, 20)
-        inviteBtn:SetPoint("RIGHT", 0, 0)
+    if rowIndex == 0 then
+        rowFrame:SetPoint("TOPLEFT", SocialLFGScrollChild, "TOPLEFT", 0, 0)
+    else
+        rowFrame:SetPoint("TOPLEFT", self.listFrames[rowIndex], "BOTTOMLEFT", 0, 0)
+    end
+    
+    -- Background for alternating rows
+    local bg = rowFrame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(true)
+    if rowIndex % 2 == 0 then
+        bg:SetColorTexture(0.1, 0.1, 0.1, 0.3)
+    else
+        bg:SetColorTexture(0.1, 0.1, 0.1, 0.1)
+    end
+    
+    -- Player name (left side)
+    local name = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    name:SetPoint("LEFT", rowFrame, "LEFT", 10, 0)
+    name:SetWidth(120)
+    name:SetHeight(CONSTANTS.ROW_HEIGHT)
+    name:SetJustifyH("LEFT")
+    name:SetJustifyV("MIDDLE")
+    name:SetText(player)
+    
+    -- Role icons
+    local roleStartX = 145
+    for idx, role in ipairs(status.roles) do
+        local icon = rowFrame:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(14, 14)
+        icon:SetPoint("LEFT", rowFrame, "LEFT", roleStartX + (idx - 1) * 18, 0)
+        icon:SetAtlas(self:GetRoleAtlas(role), true)
+    end
+    
+    -- Categories
+    local categories = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    categories:SetPoint("LEFT", rowFrame, "LEFT", 220, 0)
+    categories:SetWidth(140)
+    categories:SetHeight(CONSTANTS.ROW_HEIGHT)
+    categories:SetJustifyH("LEFT")
+    categories:SetJustifyV("MIDDLE")
+    categories:SetText(table.concat(status.categories, ", "))
+    
+    -- Invite button (right side) - only if not the current player
+    local charName = strsplit("-", player) or player
+    if charName ~= currentPlayerName then
+        local inviteBtn = CreateFrame("Button", nil, rowFrame, "UIPanelButtonTemplate")
+        inviteBtn:SetSize(70, 22)
+        inviteBtn:SetPoint("RIGHT", rowFrame, "RIGHT", -5, 0)
         inviteBtn:SetText("Invite")
+        inviteBtn:SetNormalFontObject("GameFontNormalSmall")
         inviteBtn:SetScript("OnClick", function() C_PartyInfo.InviteUnit(player) end)
-        
-        table.insert(self.listFrames, frame)
-        previous = frame
     end
     
-    for player, status in pairs(self.lfgMembers) do
-        AddEntry(player, status)
-    end
-    
-    -- Clear scroll child and reset height
-    SocialLFGScrollChild:SetHeight(math.max(1, #self.listFrames * 22))
-    SocialLFGScrollFrame:UpdateScrollChildRect()
+    table.insert(self.listFrames, rowFrame)
 end
 
 SLASH_SOCIALLFG1 = "/slfg"
