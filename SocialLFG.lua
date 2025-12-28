@@ -224,10 +224,10 @@ function SocialLFG:HandleGroupStatusChange(event)
 end
 
 function SocialLFG:HandleAddonMessage(message, sender, channel)
-    local cmd, arg1, arg2, arg3 = strsplit("|", message)
+    local cmd, arg1, arg2, arg3, arg4 = strsplit("|", message)
     
     if cmd == "STATUS" then
-        self:HandleStatusMessage(sender, arg1, arg2, arg3)
+        self:HandleStatusMessage(sender, arg1, arg2, arg3, arg4)
     elseif cmd == "QUERY" then
         self:HandleQueryMessage(sender)
     elseif cmd == "UNREGISTER" then
@@ -235,15 +235,16 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
     end
 end
 
-function SocialLFG:HandleStatusMessage(sender, arg1, arg2, arg3)
+function SocialLFG:HandleStatusMessage(sender, arg1, arg2, arg3, arg4)
     self.lastSeen[sender] = GetTime()
     
     local categories = self:ParseCategories(arg1)
     local roles = self:ParseRoles(arg2)
     local ilvl = tonumber(arg3) or 0
+    local rio = tonumber(arg4) or 0
     
     if #categories > 0 then
-        self:UpdateStatus(sender, {categories = categories, roles = roles, ilvl = ilvl})
+        self:UpdateStatus(sender, {categories = categories, roles = roles, ilvl = ilvl, rio = rio})
     else
         self:UpdateStatus(sender, nil)
     end
@@ -272,7 +273,8 @@ end
 function SocialLFG:HandleQueryMessage(sender)
     if #self.db.myStatus.categories > 0 then
         local ilvl = math.floor(GetAverageItemLevel())
-        self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl, "WHISPER", sender)
+        local rio = self:GetRioScore()
+        self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl .. "|" .. rio, "WHISPER", sender)
     end
 end
 
@@ -438,9 +440,28 @@ function SocialLFG:UnregisterLFG()
     self:UpdateList()
 end
 
+function SocialLFG:GetRioScore()
+    -- Use standard Raider.IO API for current expansion
+    if RaiderIO and RaiderIO.GetProfile then
+        local charName = UnitName("player")
+        local realmName = GetRealmName()
+        
+        local profile = RaiderIO.GetProfile(charName, realmName)
+        if profile and profile.mythicKeystoneProfile then
+            -- Use warband score (account-wide) if available, otherwise fall back to character score
+            local score = profile.mythicKeystoneProfile.warbandCurrentScore or profile.mythicKeystoneProfile.currentScore
+            if score then
+                return math.floor(score)
+            end
+        end
+    end
+    return 0
+end
+
 function SocialLFG:SendUpdate()
     local ilvl = math.floor(GetAverageItemLevel())
-    local msg = "STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl
+    local rio = self:GetRioScore()
+    local msg = "STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl .. "|" .. rio
     self:BroadcastToGuildAndFriends(msg)
 end
 
@@ -603,6 +624,25 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
     ilvl:SetJustifyH("CENTER")
     ilvl:SetJustifyV("MIDDLE")
     ilvl:SetText(status.ilvl or "0")
+    
+    -- Rio score column (account-wide)
+    local rio = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rio:SetPoint("LEFT", rowFrame, "LEFT", 435, 0)
+    rio:SetWidth(50)
+    rio:SetHeight(CONSTANTS.ROW_HEIGHT)
+    rio:SetJustifyH("CENTER")
+    rio:SetJustifyV("MIDDLE")
+    rio:SetText(status.rio or "0")
+    
+    -- Add a tooltip to indicate it's account Rio
+    rio:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Raider.IO Account Score", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    rio:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     
     -- Invite button (right side) - only if not the current player
     local charName = strsplit("-", player) or player
