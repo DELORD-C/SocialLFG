@@ -452,19 +452,50 @@ function SocialLFG:OnShow()
     end
 end
 
+-- Initialize stats cache
+if not SocialLFG.statsCache then
+    SocialLFG.statsCache = {}
+end
+
+-- Cache duration in seconds (300 = 5 minutes)
+SocialLFG.STATS_CACHE_DURATION = 300
+
+function SocialLFG:GetCachedStats(playerName)
+    if not playerName then return nil end
+    
+    local cached = self.statsCache[playerName]
+    if cached and (GetTime() - cached.timestamp) < self.STATS_CACHE_DURATION then
+        return cached.stats
+    end
+    return nil
+end
+
+function SocialLFG:CacheStats(playerName, stats)
+    if not playerName or not stats then return end
+    self.statsCache[playerName] = {
+        stats = stats,
+        timestamp = GetTime()
+    }
+end
+
 function SocialLFG:GetPlayerStats(playerName)
+    if not playerName then
+        return {ilvl = "N/A", rio = "N/A"}
+    end
+    
+    -- Check cache first
+    local cachedStats = self:GetCachedStats(playerName)
+    if cachedStats then
+        return cachedStats
+    end
+    
     local stats = {
         ilvl = "N/A",
         rio = "N/A"
     }
     
-    if not playerName then
-        return stats
-    end
-    
     -- Try to get RaiderIO score first (most reliable)
     if RaiderIO then
-        -- Try to get the profile - RaiderIO handles realm lookup internally
         local success, profile = pcall(function()
             return RaiderIO.GetProfile(playerName)
         end)
@@ -487,7 +518,6 @@ function SocialLFG:GetPlayerStats(playerName)
     -- Try Blizzard API for item level as fallback
     if stats.ilvl == "N/A" then
         local success, ilvl = pcall(function()
-            -- Try to get character info via C_Armory if available
             if C_Armory and C_Armory.GetCharacterGearSummary then
                 return C_Armory.GetCharacterGearSummary(playerName)
             end
@@ -499,6 +529,8 @@ function SocialLFG:GetPlayerStats(playerName)
         end
     end
     
+    -- Cache the result
+    self:CacheStats(playerName, stats)
     return stats
 end
 
@@ -532,23 +564,67 @@ function SocialLFG:UpdateList()
             frame:SetPoint("TOPLEFT", SocialLFGScrollChild, "TOPLEFT", 0, 0)
         end
         
+        -- Create clickable name text with stats on hover
         local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         nameText:SetPoint("LEFT", 0, 0)
         local displayText = player .. 
             " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ")"
         nameText:SetText(displayText)
         
+        -- Create a hover frame for tooltip functionality
+        local hoverFrame = CreateFrame("Frame", nil, frame)
+        hoverFrame:SetSize(300, 20)
+        hoverFrame:SetPoint("LEFT", 0, 0)
+        hoverFrame:EnableMouse(true)
+        
+        -- Store player name for tooltip retrieval
+        hoverFrame.playerName = player
+        hoverFrame.categories = status.categories
+        hoverFrame.roles = status.roles
+        
+        -- Add tooltip on hover
+        hoverFrame:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(hoverFrame, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(self.playerName, 1, 1, 1)
+            GameTooltip:AddLine(" ")
+            
+            -- Get player stats
+            local stats = SocialLFG:GetPlayerStats(self.playerName)
+            
+            -- Display categories and roles
+            GameTooltip:AddLine("LFG: " .. table.concat(self.categories, ", "), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine("Roles: " .. table.concat(self.roles, ", "), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(" ")
+            
+            -- Display stats with color coding
+            local ilvlColor = stats.ilvl == "N/A" and "|cFFFF0000" or "|cFF0FFF0F"
+            local rioColor = stats.rio == "N/A" and "|cFFFF0000" or "|cFF0FFF0F"
+            
+            GameTooltip:AddLine("Item Level: " .. ilvlColor .. stats.ilvl .. "|r", 1, 1, 1)
+            GameTooltip:AddLine("Raider IO: " .. rioColor .. stats.rio .. "|r", 1, 1, 1)
+            
+            GameTooltip:Show()
+        end)
+        
+        hoverFrame:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        
+        -- Create invite button
         local inviteBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         inviteBtn:SetSize(60, 20)
         inviteBtn:SetPoint("RIGHT", 0, 0)
         inviteBtn:SetText("Invite")
         inviteBtn:SetScript("OnClick", function() C_PartyInfo.InviteUnit(player) end)
+        
         table.insert(self.listFrames, frame)
         previous = frame
     end
+    
     for player, status in pairs(self.lfgMembers) do
         AddEntry(player, status)
     end
+    
     -- Clear scroll child and reset height
     SocialLFGScrollChild:SetHeight(math.max(1, #self.listFrames * 22))
     SocialLFGScrollFrame:UpdateScrollChildRect()
