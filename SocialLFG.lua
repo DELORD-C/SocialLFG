@@ -224,10 +224,10 @@ function SocialLFG:HandleGroupStatusChange(event)
 end
 
 function SocialLFG:HandleAddonMessage(message, sender, channel)
-    local cmd, arg1, arg2 = strsplit("|", message)
+    local cmd, arg1, arg2, arg3 = strsplit("|", message)
     
     if cmd == "STATUS" then
-        self:HandleStatusMessage(sender, arg1, arg2)
+        self:HandleStatusMessage(sender, arg1, arg2, arg3)
     elseif cmd == "QUERY" then
         self:HandleQueryMessage(sender)
     elseif cmd == "UNREGISTER" then
@@ -235,14 +235,15 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
     end
 end
 
-function SocialLFG:HandleStatusMessage(sender, arg1, arg2)
+function SocialLFG:HandleStatusMessage(sender, arg1, arg2, arg3)
     self.lastSeen[sender] = GetTime()
     
     local categories = self:ParseCategories(arg1)
     local roles = self:ParseRoles(arg2)
+    local ilvl = tonumber(arg3) or 0
     
     if #categories > 0 then
-        self:UpdateStatus(sender, {categories = categories, roles = roles})
+        self:UpdateStatus(sender, {categories = categories, roles = roles, ilvl = ilvl})
     else
         self:UpdateStatus(sender, nil)
     end
@@ -270,7 +271,8 @@ end
 
 function SocialLFG:HandleQueryMessage(sender)
     if #self.db.myStatus.categories > 0 then
-        self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ","), "WHISPER", sender)
+        local ilvl = math.floor(GetAverageItemLevel())
+        self:SendAddonMessage("STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl, "WHISPER", sender)
     end
 end
 
@@ -437,7 +439,8 @@ function SocialLFG:UnregisterLFG()
 end
 
 function SocialLFG:SendUpdate()
-    local msg = "STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",")
+    local ilvl = math.floor(GetAverageItemLevel())
+    local msg = "STATUS|" .. table.concat(self.db.myStatus.categories, ",") .. "|" .. table.concat(self.db.myStatus.roles, ",") .. "|" .. ilvl
     self:BroadcastToGuildAndFriends(msg)
 end
 
@@ -591,6 +594,15 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
     categories:SetJustifyH("LEFT")
     categories:SetJustifyV("MIDDLE")
     categories:SetText(table.concat(status.categories, ", "))
+    
+    -- iLvL column
+    local ilvl = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ilvl:SetPoint("LEFT", rowFrame, "LEFT", 375, 0)
+    ilvl:SetWidth(50)
+    ilvl:SetHeight(CONSTANTS.ROW_HEIGHT)
+    ilvl:SetJustifyH("CENTER")
+    ilvl:SetJustifyV("MIDDLE")
+    ilvl:SetText(status.ilvl or "0")
     
     -- Invite button (right side) - only if not the current player
     local charName = strsplit("-", player) or player
