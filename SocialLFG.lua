@@ -8,17 +8,38 @@ local CONSTANTS = {
     ROW_HEIGHT = 24,
     ROLE_ICON_SIZE = 12,
     CLASS_ICON_SIZE = 16,
-    CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon"},
+    CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon", "Boosting", "PVP"},
     ROLES = {"Tank", "Heal", "DPS"},
 }
 
 -- Logging utilities with consistent formatting
 local function Log(level, msg)
+    if msg and msg ~= "" then
+        local timestamp = date("%H:%M:%S")
+        local prefix = "|cFF4DA6FFSocialLFG|r"
+        local levelStr = ""
+        
+        if level == "WARN" then
+            levelStr = "|cFFFF9900[WARN]|r"
+        elseif level == "ERROR" then
+            levelStr = "|cFFFF6B6B[ERROR]|r"
+        elseif level == "INFO" then
+            levelStr = "|cFF00FF00[INFO]|r"
+        end
+        
+        print(string.format("%s %s %s", prefix, levelStr, msg))
+    end
 end
 
-function SocialLFG:LogDebug(msg) end
-function SocialLFG:LogInfo(msg) end
-function SocialLFG:LogWarn(msg) end
+function SocialLFG:LogDebug(msg) 
+    -- Debug logging disabled by default for clean UI
+    -- Uncomment below to enable during development
+    -- Log("DEBUG", msg)
+end
+
+function SocialLFG:LogInfo(msg) Log("INFO", msg) end
+function SocialLFG:LogWarn(msg) Log("WARN", msg) end
+function SocialLFG:LogError(msg) Log("ERROR", msg) end
 -- Class role mapping
 local CLASS_ROLES = {
     ["WARRIOR"] = {"Tank", "DPS"},
@@ -52,6 +73,8 @@ function SocialLFG:InitializeUpdateTimer()
     self.lastUpdateTime = 0
     self.lastQueryTime = 0
     self.playerKeystone = nil
+    self.lastListUpdateTime = 0
+    self.listUpdateThrottle = 0.5  -- Throttle list updates to max 0.5 seconds
 end
 
 -- ============================================================================
@@ -300,11 +323,13 @@ function SocialLFG:InitializeDatabase()
     self.lastSeen = {}
     self.TIMEOUT = CONSTANTS.TIMEOUT
     self.rioInitialized = false
+    self.hasInitialQuery = false
     
     self:EnsureDatabaseFields()
     self:LogDatabaseStatus()
     self:RestoreCheckboxStates()
     self:UpdatePlayerKeystone()  -- Initialize keystone on load
+    self:UpdateMinimapIcon()  -- Update icon appearance on load
 end
 
 function SocialLFG:EnsureDatabaseFields()
@@ -340,6 +365,8 @@ function SocialLFG:RestoreCheckboxStates()
             if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
             if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
             if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+            if cat == "Boosting" then SocialLFGBoostingCheck:SetChecked(true) end
+            if cat == "PVP" then SocialLFGPVPCheck:SetChecked(true) end
         end
         for _, role in ipairs(self.db.myStatus.roles) do
             if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
@@ -351,6 +378,8 @@ function SocialLFG:RestoreCheckboxStates()
             if cat == "Raid" then SocialLFGRaidCheck:SetChecked(true) end
             if cat == "Mythic+" then SocialLFGMythicCheck:SetChecked(true) end
             if cat == "Questing" then SocialLFGQuestingCheck:SetChecked(true) end
+            if cat == "Boosting" then SocialLFGBoostingCheck:SetChecked(true) end
+            if cat == "PVP" then SocialLFGPVPCheck:SetChecked(true) end
         end
         for _, role in ipairs(self.db.savedRoles) do
             if role == "Tank" then SocialLFGTankCheck:SetChecked(true) end
@@ -379,22 +408,34 @@ function SocialLFG:HandleGroupStatusChange(event)
             }
             self:SendUpdate()
             self:UpdateButtonState()
+            self:UpdateMinimapIcon()
             if self.frame:IsShown() then
                 self:OnShow()
             end
             self.db.wasRegisteredBeforeGroup = false
         else
-            -- Even if not re-registering, update button state
+            -- Even if not re-registering, update button state and icon
             self:UpdateButtonState()
+            self:UpdateMinimapIcon()
         end
     end
 end
 
 function SocialLFG:HandleAddonMessage(message, sender, channel)
-    local cmd, arg1, arg2, arg3, arg4, arg5, arg6 = strsplit("|", message)
+    if not message or not sender then
+        return
+    end
+    
+    -- Safely parse message with delimiter
+    local parts = self:SplitMessage(message, "|")
+    if not parts or #parts < 1 then
+        return
+    end
+    
+    local cmd = parts[1]
     
     if cmd == "STATUS" then
-        self:HandleStatusMessage(sender, arg1, arg2, arg3, arg4, arg5, arg6)
+        self:HandleStatusMessage(sender, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7])
     elseif cmd == "QUERY" then
         self:HandleQueryMessage(sender)
     elseif cmd == "UNREGISTER" then
@@ -402,9 +443,85 @@ function SocialLFG:HandleAddonMessage(message, sender, channel)
     end
 end
 
+function SocialLFG:SplitMessage(message, delimiter)
+    if not message then return {} end
+    
+    local parts = {}
+    local start = 1
+    
+    while true do
+        local pos = message:find(delimiter, start, true)
+        if not pos then
+            -- Last part
+            table.insert(parts, message:sub(start))
+            break
+        else
+            table.insert(parts, message:sub(start, pos - 1))
+            start = pos + #delimiter
+        end
+    end
+    
+    return parts
+end
+
+function SocialLFG:IsValidPlayerName(name)
+    if not name or name == "" then
+        return false
+    end
+    
+    -- Player names should have format "Name-Realm" or just "Name"
+    -- Names should not contain certain control characters, but can contain Unicode
+    local hasControlChars = false
+    for i = 1, #name do
+        local byte = string.byte(name, i)
+        if byte and byte < 32 then
+            hasControlChars = true
+            break
+        end
+    end
+    
+    return not hasControlChars
+end
+
+function SocialLFG:NormalizePlayerName(playerString)
+    -- Normalize player names by handling edge cases
+    if not playerString or playerString == "" then
+        return nil
+    end
+    
+    -- Remove any leading/trailing whitespace
+    playerString = playerString:match("^%s*(.-)%s*$")
+    
+    -- Return the normalized name
+    return playerString ~= "" and playerString or nil
+end
+
+function SocialLFG:ExtractCharacterName(fullName)
+    -- Safely extract character name from "Name-Realm" format
+    -- This handles realms with special characters like apostrophes
+    if not fullName or fullName == "" then
+        return nil
+    end
+    
+    -- Find the last hyphen (realm names can have hyphens too)
+    local lastHyphen = fullName:match("^(.+)%-([^%-]+)$")
+    if lastHyphen then
+        return lastHyphen
+    end
+    
+    -- If no hyphen found, the entire string is the character name
+    return fullName
+end
+
 function SocialLFG:HandleStatusMessage(sender, arg1, arg2, arg3, arg4, arg5, arg6)
     -- Never update local player data from incoming messages
     -- Local player data should ONLY be updated via AddPlayerToOwnList() from local events
+    
+    -- Validate sender name
+    if not self:IsValidPlayerName(sender) then
+        return
+    end
+    
     local myName = self:GetLocalPlayerFullName()
     if sender == myName then
         return
@@ -467,6 +584,11 @@ function SocialLFG:HandleQueryMessage(sender)
 end
 
 function SocialLFG:UpdateStatus(player, status)
+    if not self:IsValidPlayerName(player) then
+        self:LogError("Attempted to update status for invalid player name: " .. tostring(player))
+        return
+    end
+    
     local localPlayer = self:GetLocalPlayerFullName()
     
     -- Never remove local player via UpdateStatus - only via explicit UnregisterLFG
@@ -507,19 +629,23 @@ function SocialLFG:CheckTimeouts()
     for player, lastTime in pairs(self.lastSeen) do
         -- Never timeout the local player
         if player == localPlayer then
-            -- Reset local player timeout timer
+            -- Keep local player's timeout current
             self.lastSeen[player] = currentTime
-        -- Remove players who disconnected (they're in our list but not online anymore)
-        elseif onlineFriends[player] == false or (not onlineFriends[player] and lastTime and lastTime > 0) then
-            -- This player was online but is no longer in the online friends list
-            self.lfgMembers[player] = nil
-            self.lastSeen[player] = nil
-            removed = true
-        -- Remove players who timeout normally
-        elseif currentTime - lastTime > self.TIMEOUT then
-            self.lfgMembers[player] = nil
-            self.lastSeen[player] = nil
-            removed = true
+        else
+            local isOnline = onlineFriends[player] == true
+            local timeSinceLastSeen = currentTime - lastTime
+            
+            -- Remove if offline (no longer in friends list) AND timeout threshold exceeded
+            if not isOnline and timeSinceLastSeen > self.TIMEOUT then
+                self.lfgMembers[player] = nil
+                self.lastSeen[player] = nil
+                removed = true
+            -- Remove if only regular timeout exceeded (shouldn't happen if receiving updates, but safety net)
+            elseif timeSinceLastSeen > (self.TIMEOUT * 3) then
+                self.lfgMembers[player] = nil
+                self.lastSeen[player] = nil
+                removed = true
+            end
         end
     end
     
@@ -597,12 +723,37 @@ function SocialLFG:UpdateFriends()
     local friends = self:GetAllOnlineFriends()
     
     for _, fullName in ipairs(friends) do
-        self:SendAddonMessage("QUERY", "WHISPER", fullName)
-        self.db.queriedFriends[fullName] = true
+        if self:IsValidPlayerName(fullName) then
+            self:SendAddonMessage("QUERY", "WHISPER", fullName)
+            self.db.queriedFriends[fullName] = true
+        else
+            self:LogWarn("Skipping friend query for invalid name: " .. tostring(fullName))
+        end
     end
 end
 
 function SocialLFG:SendAddonMessage(message, channel, target)
+    if not message or message == "" then
+        self:LogError("Attempted to send empty addon message")
+        return
+    end
+    
+    -- Validate parameters
+    if channel ~= "GUILD" and channel ~= "WHISPER" and channel ~= "PARTY" and channel ~= "RAID" then
+        self:LogError("Invalid channel: " .. tostring(channel))
+        return
+    end
+    
+    if channel == "WHISPER" and (not target or target == "") then
+        self:LogError("WHISPER channel requires a valid target")
+        return
+    end
+    
+    if channel == "WHISPER" and not self:IsValidPlayerName(target) then
+        self:LogError("Invalid target player name: " .. tostring(target))
+        return
+    end
+    
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, target)
 end
 
@@ -638,6 +789,14 @@ function SocialLFG:UpdateButtonState()
     end
 end
 
+function SocialLFG:UpdateMinimapIcon()
+    -- Update the minimap icon appearance and tooltip
+    -- The plugin is made available globally by ldb.lua
+    if _G.SocialLFGPlugin and _G.SocialLFGPlugin.UpdateIconAppearance then
+        _G.SocialLFGPlugin:UpdateIconAppearance()
+    end
+end
+
 function SocialLFG:SaveCheckboxState()
     self.db.savedCategories = self:GetCheckedCategories()
     self.db.savedRoles = self:GetCheckedRoles()
@@ -648,6 +807,8 @@ function SocialLFG:GetCheckedCategories()
     if SocialLFGRaidCheck:GetChecked() then table.insert(categories, "Raid") end
     if SocialLFGMythicCheck:GetChecked() then table.insert(categories, "Mythic+") end
     if SocialLFGQuestingCheck:GetChecked() then table.insert(categories, "Questing") end
+    if SocialLFGBoostingCheck:GetChecked() then table.insert(categories, "Boosting") end
+    if SocialLFGPVPCheck:GetChecked() then table.insert(categories, "PVP") end
     return categories
 end
 
@@ -664,10 +825,54 @@ function SocialLFG:BroadcastToAll(channel, message, target)
     self:SendAddonMessage(message, channel, target)
 end
 
+function SocialLFG:SafeInvitePlayer(player, charName)
+    if not player or player == "" then
+        self:LogError("Cannot invite: invalid player name")
+        return
+    end
+    
+    if not charName or charName == "" then
+        charName = strsplit("-", player) or player
+    end
+    
+    -- Try multiple invite methods in order of preference
+    -- Method 1: Try with full name (Name-Realm format)
+    if pcall(function() C_PartyInfo.InviteUnit(player) end) then
+        self:LogInfo("Invited: " .. player)
+        return
+    end
+    
+    -- Method 2: Try with character name only
+    if pcall(function() C_PartyInfo.InviteUnit(charName) end) then
+        self:LogInfo("Invited: " .. charName)
+        return
+    end
+    
+    -- Method 3: Use chat command as fallback (safest for special characters)
+    ChatFrame_SendTell(charName, true)
+    if ChatFrame1 and ChatFrame1:IsVisible() then
+        -- Chat window is open, will invite via command
+        ChatFrame_OpenChat("/invite " .. charName, ChatFrame1)
+    else
+        -- Fallback to using the invite command directly
+        SlashCmdList["INVITE"](charName)
+    end
+    
+    self:LogWarn("Invited " .. charName .. " using alternative method")
+end
+
 function SocialLFG:BroadcastToGuildAndFriends(message)
+    if not message or message == "" then
+        self:LogError("Attempted to broadcast empty message")
+        return
+    end
+    
     self:BroadcastToAll("GUILD", message)
-    for _, fullName in ipairs(self:GetAllOnlineFriends()) do
-        self:BroadcastToAll("WHISPER", message, fullName)
+    local friends = self:GetAllOnlineFriends()
+    for _, fullName in ipairs(friends) do
+        if self:IsValidPlayerName(fullName) then
+            self:BroadcastToAll("WHISPER", message, fullName)
+        end
     end
 end
 
@@ -680,14 +885,35 @@ function SocialLFG:ToggleLFG()
 end
 
 function SocialLFG:RegisterLFG()
+    -- Try to get checked categories from UI, fall back to saved if window is closed
     local categories = self:GetCheckedCategories()
+    if #categories == 0 then
+        categories = self.db.savedCategories or {}
+    end
+    
+    -- Try to get checked roles from UI, fall back to saved if window is closed
     local roles = self:GetCheckedRoles()
+    if #roles == 0 then
+        roles = self.db.savedRoles or {}
+    end
+    
+    -- Validate that both categories and roles are selected
+    if #categories == 0 then
+        self:LogWarn("Cannot register: Please select at least one category")
+        return
+    end
+    if #roles == 0 then
+        self:LogWarn("Cannot register: Please select at least one role")
+        return
+    end
+    
     self.db.myStatus = {categories = categories, roles = roles}
     self.db.savedCategories = categories
     self.db.savedRoles = roles
     self:SendUpdate()
     self:AddPlayerToOwnList()
     self:UpdateButtonState()
+    self:UpdateMinimapIcon()
 end
 
 function SocialLFG:UnregisterLFG()
@@ -698,6 +924,7 @@ function SocialLFG:UnregisterLFG()
     self.lastSeen[playerFullName] = nil
     self:BroadcastToGuildAndFriends("UNREGISTER")
     self:UpdateButtonState()
+    self:UpdateMinimapIcon()
     self:UpdateList()
 end
 
@@ -786,16 +1013,23 @@ end
 function SocialLFG:SetCheckboxesFromCategories(categories)
     SocialLFGRaidCheck:SetChecked(tContains(categories, "Raid"))
     SocialLFGMythicCheck:SetChecked(tContains(categories, "Mythic+"))
+    SocialLFGBoostingCheck:SetChecked(tContains(categories, "Boosting"))
     SocialLFGQuestingCheck:SetChecked(tContains(categories, "Questing"))
+    SocialLFGPVPCheck:SetChecked(tContains(categories, "PVP"))
 end
 
 function SocialLFG:OnShow()
     self:RestoreUIState()
     self:UpdateButtonState()
+    self:UpdateMinimapIcon()
     -- Ensure player is in their own list with current data
     self:AddPlayerToOwnList()
-    -- Immediately query all players for instant list population
-    self:QueryAllPlayers()
+    -- Query all players only on first show per session, or periodically via StartPeriodicUpdates
+    -- to prevent redundant queries
+    if not self.hasInitialQuery then
+        self:QueryAllPlayers()
+        self.hasInitialQuery = true
+    end
     self:UpdateList()
     self:StartPeriodicUpdates()
 end
@@ -825,19 +1059,27 @@ function SocialLFG:StartPeriodicUpdates()
     if not self.updateTimer then
         self.updateTimer = C_Timer.NewTicker(CONSTANTS.QUERY_INTERVAL, function()
             if SocialLFG and SocialLFG.frame:IsShown() then
-                SocialLFG:QueryAllPlayers()
+                -- Periodic check for timeouts and query
                 SocialLFG:CheckTimeouts()
-                SocialLFG:UpdateList()
+                SocialLFG:QueryAllPlayers()
+                -- UpdateList is only called when data actually changes (via UpdateStatus)
             end
         end)
     end
 end
 
 function SocialLFG:QueryAllPlayers()
+    -- Send query to guild members
     self:SendAddonMessage("QUERY", "GUILD")
     
-    for _, fullName in ipairs(self:GetAllOnlineFriends()) do
-        self:SendAddonMessage("QUERY", "WHISPER", fullName)
+    -- Send query to all online friends
+    local friends = self:GetAllOnlineFriends()
+    for _, fullName in ipairs(friends) do
+        if self:IsValidPlayerName(fullName) then
+            self:SendAddonMessage("QUERY", "WHISPER", fullName)
+        else
+            self:LogWarn("Skipping query for invalid player name: " .. tostring(fullName))
+        end
     end
 end
 
@@ -854,6 +1096,13 @@ function SocialLFG:GetRoleAtlas(role)
 end
 
 function SocialLFG:UpdateList()
+    -- Throttle list updates to prevent excessive frame recreation causing blinking
+    local currentTime = GetTime()
+    if currentTime - self.lastListUpdateTime < self.listUpdateThrottle then
+        return
+    end
+    self.lastListUpdateTime = currentTime
+    
     self:DestroyListFrames()
     
     local playerName = UnitName("player")
@@ -941,8 +1190,8 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
     name:SetJustifyH("LEFT")
     name:SetJustifyV("MIDDLE")
     
-    -- Extract character name without realm
-    local charName = strsplit("-", player) or player
+    -- Extract character name without realm (handles realms with special characters like apostrophes)
+    local charName = self:ExtractCharacterName(player) or player
     
     -- Apply class color to name if we have class info
     if playerClass then
@@ -1007,7 +1256,6 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
     keystone:SetText(status.keystone or "-")
     
     -- Invite button: X=450, W=65
-    local charName = strsplit("-", player) or player
     if charName ~= currentPlayerName then
         local inviteBtn = CreateFrame("Button", nil, rowFrame, "UIPanelButtonTemplate")
         inviteBtn:SetSize(65, 22)
@@ -1015,8 +1263,12 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
         inviteBtn:SetText("Invite")
         inviteBtn:SetNormalFontObject("GameFontNormalSmall")
         
-        -- Use full player name for invites (player is "Name-Realm" from addon message sender)
-        inviteBtn:SetScript("OnClick", function() C_PartyInfo.InviteUnit(player) end)
+        -- Use safe invite function that handles special characters in player names
+        inviteBtn:SetScript("OnClick", function() 
+            if player and player ~= "" then
+                SocialLFG:SafeInvitePlayer(player, charName)
+            end
+        end)
         
         -- Whisper button: X=520, W=65
         local whisperBtn = CreateFrame("Button", nil, rowFrame, "UIPanelButtonTemplate")
@@ -1024,7 +1276,11 @@ function SocialLFG:CreateListRow(player, status, rowIndex, currentPlayerName)
         whisperBtn:SetPoint("LEFT", rowFrame, "LEFT", 535, 0)
         whisperBtn:SetText("Whisper")
         whisperBtn:SetNormalFontObject("GameFontNormalSmall")
-        whisperBtn:SetScript("OnClick", function() ChatFrame_OpenChat("/w " .. charName .. " ", ChatFrame1) end)
+        whisperBtn:SetScript("OnClick", function() 
+            if charName and charName ~= "" then
+                ChatFrame_OpenChat("/w " .. charName .. " ", ChatFrame1)
+            end
+        end)
     end
     
     table.insert(self.listFrames, rowFrame)

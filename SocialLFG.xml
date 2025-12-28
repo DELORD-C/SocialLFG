@@ -104,6 +104,34 @@
             </Scripts>
         </CheckButton>
         
+        <CheckButton name="SocialLFGBoostingCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGQuestingCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Boosting">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGPVPCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGBoostingCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="PvP">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
         <!-- Role Checkboxes -->
         <CheckButton name="SocialLFGTankCheck" inherits="UICheckButtonTemplate">
             <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-110"/></Anchors>
