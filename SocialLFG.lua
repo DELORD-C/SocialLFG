@@ -452,12 +452,54 @@ function SocialLFG:OnShow()
     end
 end
 
-function SocialLFG:OnHide()
-    -- Stop the periodic update timer when window closes
-    if self.updateTimer then
-        self.updateTimer:Cancel()
-        self.updateTimer = nil
+function SocialLFG:GetPlayerStats(playerName)
+    local stats = {
+        ilvl = "N/A",
+        rio = "N/A"
+    }
+    
+    if not playerName then
+        return stats
     end
+    
+    -- Try to get RaiderIO score first (most reliable)
+    if RaiderIO then
+        -- Try to get the profile - RaiderIO handles realm lookup internally
+        local success, profile = pcall(function()
+            return RaiderIO.GetProfile(playerName)
+        end)
+        
+        if success and profile then
+            -- Get M+ score if available
+            if profile.mythicPlusScore and profile.mythicPlusScore > 0 then
+                stats.rio = tostring(math.floor(profile.mythicPlusScore))
+            elseif profile.raidProgression then
+                stats.rio = "Raider"
+            end
+            
+            -- Get item level from profile if available
+            if profile.gearLevel and profile.gearLevel > 0 then
+                stats.ilvl = tostring(profile.gearLevel)
+            end
+        end
+    end
+    
+    -- Try Blizzard API for item level as fallback
+    if stats.ilvl == "N/A" then
+        local success, ilvl = pcall(function()
+            -- Try to get character info via C_Armory if available
+            if C_Armory and C_Armory.GetCharacterGearSummary then
+                return C_Armory.GetCharacterGearSummary(playerName)
+            end
+            return nil
+        end)
+        
+        if success and ilvl then
+            stats.ilvl = tostring(ilvl)
+        end
+    end
+    
+    return stats
 end
 
 function SocialLFG:UpdateList()
@@ -489,16 +531,13 @@ function SocialLFG:UpdateList()
         else
             frame:SetPoint("TOPLEFT", SocialLFGScrollChild, "TOPLEFT", 0, 0)
         end
-        local rio = "N/A"
-        if RaiderIO then
-            local profile = RaiderIO.GetProfile(player)
-            if profile and profile.mythicPlusScore then
-                rio = profile.mythicPlusScore
-            end
-        end
+        
         local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         nameText:SetPoint("LEFT", 0, 0)
-        nameText:SetText(player .. " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ") Rio: " .. rio)
+        local displayText = player .. 
+            " (" .. table.concat(status.categories, ", ") .. " - " .. table.concat(status.roles, ", ") .. ")"
+        nameText:SetText(displayText)
+        
         local inviteBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         inviteBtn:SetSize(60, 20)
         inviteBtn:SetPoint("RIGHT", 0, 0)
