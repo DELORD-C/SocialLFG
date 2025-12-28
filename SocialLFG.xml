@@ -1,146 +1,194 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/..\FrameXML\UI.xsd">
 <Frame name="SocialLFGFrame" parent="UIParent" hidden="true">
-<Size x="550" y="500"/>
-<Anchors><Anchor point="CENTER"/></Anchors>
-<Layers><Layer level="BACKGROUND">
-<Texture setAllPoints="true">
-<Color r="0" g="0" b="0" a="0.8"/>
-</Texture>
-</Layer><Layer level="OVERLAY">
-<FontString inherits="GameFontNormal" text="Social LFG">
-<Anchors><Anchor point="TOP" x="0" y="-15"/></Anchors>
-</FontString>
-<FontString inherits="GameFontNormal" text="Category:">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-25"/></Anchors>
-</FontString>
-<FontString inherits="GameFontNormal" text="Roles:">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-105"/></Anchors>
-</FontString>
-<FontString inherits="GameFontNormal" text="LFG Members:">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-180"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Frames>
-<!-- Close Button -->
-<Button name="SocialLFGCloseButton" inherits="UIPanelCloseButton">
-<Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGFrame" x="-5" y="-5"/></Anchors>
-</Button>
-<!-- Reload Button -->
-<Button name="SocialLFGReloadButton" inherits="UIPanelButtonTemplate" text="Reload">
-<Size x="60" y="22"/>
-<Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGCloseButton" relativePoint="TOPLEFT" x="-5" y="0"/></Anchors>
-<Scripts>
-<OnClick>ReloadUI()</OnClick>
-</Scripts>
-</Button>
-<!-- Category Checkboxes -->
-<CheckButton name="SocialLFGRaidCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-40"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="Raid">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<CheckButton name="SocialLFGMythicCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="LEFT" relativeTo="SocialLFGRaidCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="Mythic+">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<CheckButton name="SocialLFGQuestingCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="LEFT" relativeTo="SocialLFGMythicCheck" relativePoint="RIGHT" x="80" y="0"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="Questing">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<!-- Role Checkboxes -->
-<CheckButton name="SocialLFGTankCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-110"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="Tank">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<CheckButton name="SocialLFGHealCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="LEFT" relativeTo="SocialLFGTankCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="Heal">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<CheckButton name="SocialLFGDPSCheck" inherits="UICheckButtonTemplate">
-<Anchors><Anchor point="LEFT" relativeTo="SocialLFGHealCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
-<Layers>
-<Layer level="OVERLAY">
-<FontString inherits="GameFontHighlight" text="DPS">
-<Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
-</FontString>
-</Layer>
-</Layers>
-<Scripts>
-<OnClick>SocialLFG:SaveCheckboxState(); SocialLFG:UpdateButtonState()</OnClick>
-</Scripts>
-</CheckButton>
-<!-- Register/Unregister Button -->
-<Button name="SocialLFGRegisterButton" inherits="UIPanelButtonTemplate" text="Register LFG">
-<Size y="30"/>
-<Anchors><Anchor point="LEFT" relativeTo="SocialLFGFrame" x="20"/><Anchor point="RIGHT" relativeTo="SocialLFGFrame" x="-20"/><Anchor point="TOP" relativeTo="SocialLFGTankCheck" relativePoint="BOTTOM" y="-10"/></Anchors>
-<Scripts>
-<OnClick>SocialLFG:ToggleLFG()</OnClick>
-</Scripts>
-</Button>
-<!-- Scroll Frame for list -->
-<ScrollFrame name="SocialLFGScrollFrame" inherits="UIPanelScrollFrameTemplate">
-<Size x="500" y="260"/>
-<Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGRegisterButton" relativePoint="BOTTOMLEFT" x="0" y="-30"/></Anchors>
-<ScrollChild>
-<Frame name="SocialLFGScrollChild">
-<Size x="500" y="1"/>
-<Frames>
-<!-- List items will be created dynamically -->
-</Frames>
-</Frame>
-</ScrollChild>
-</ScrollFrame>
-</Frames>
-<Scripts>
-<OnLoad>SocialLFG:OnLoad()</OnLoad>
-<OnShow>SocialLFG:OnShow()</OnShow>
-<OnHide>SocialLFG:OnHide()</OnHide>
-<OnKeyDown>if key == "ESCAPE" then self:Hide(); return true; end</OnKeyDown>
-</Scripts>
+    <Size x="800" y="600"/>
+    <Anchors><Anchor point="CENTER"/></Anchors>
+    
+    <!-- Background -->
+    <Layers>
+        <Layer level="BACKGROUND">
+            <Texture setAllPoints="true">
+                <Color r="0" g="0" b="0" a="0.8"/>
+            </Texture>
+        </Layer>
+        
+        <!-- Header and Labels -->
+        <Layer level="OVERLAY">
+            <!-- Title -->
+            <FontString inherits="GameFontNormal" text="Social LFG">
+                <Anchors><Anchor point="TOP" x="0" y="-15"/></Anchors>
+            </FontString>
+            
+            <!-- Category Label -->
+            <FontString inherits="GameFontNormal" text="Category:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-25"/></Anchors>
+            </FontString>
+            
+            <!-- Role Label -->
+            <FontString inherits="GameFontNormal" text="Roles:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-95"/></Anchors>
+            </FontString>
+            
+            <!-- Members Label -->
+            <FontString inherits="GameFontNormal" text="LFG Members:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-190"/></Anchors>
+            </FontString>
+            
+            <!-- Column Headers (just above scroll frame) -->
+            <FontString inherits="GameFontHighlight" text="Name">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="25" y="-210"/></Anchors>
+            </FontString>
+            <FontString inherits="GameFontHighlight" text="Roles">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="147" y="-210"/></Anchors>
+            </FontString>
+            <FontString inherits="GameFontHighlight" text="Categories">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="210" y="-210"/></Anchors>
+            </FontString>
+            <FontString inherits="GameFontHighlight" text="iLvL">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="320" y="-210"/></Anchors>
+            </FontString>
+            <FontString inherits="GameFontHighlight" text="Rio">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="365" y="-210"/></Anchors>
+            </FontString>
+            <FontString inherits="GameFontHighlight" text="Keystone">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="405" y="-210"/></Anchors>
+            </FontString>
+        </Layer>
+    </Layers>
+    
+    <Frames>
+        <!-- Close Button -->
+        <Button name="SocialLFGCloseButton" inherits="UIPanelCloseButton">
+            <Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGFrame" x="-5" y="-5"/></Anchors>
+        </Button>
+        
+        <!-- Category Checkboxes -->
+        <CheckButton name="SocialLFGRaidCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-40"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Raid">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGMythicCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGRaidCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Mythic+">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGQuestingCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGMythicCheck" relativePoint="RIGHT" x="80" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Questing">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <!-- Role Checkboxes -->
+        <CheckButton name="SocialLFGTankCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-110"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Tank">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGHealCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGTankCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="Heal">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGDPSCheck" inherits="UICheckButtonTemplate">
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGHealCheck" relativePoint="RIGHT" x="60" y="0"/></Anchors>
+            <Layers>
+                <Layer level="OVERLAY">
+                    <FontString inherits="GameFontHighlight" text="DPS">
+                        <Anchors><Anchor point="LEFT" relativeTo="$parent" relativePoint="RIGHT" x="5" y="0"/></Anchors>
+                    </FontString>
+                </Layer>
+            </Layers>
+            <Scripts>
+                <OnClick>SocialLFG:SaveCheckboxState(); local cats = SocialLFG:GetCheckedCategories(); local roles = SocialLFG:GetCheckedRoles(); if #SocialLFG.db.myStatus.categories > 0 then if #cats > 0 and #roles > 0 then SocialLFG.db.myStatus = {categories = cats, roles = roles}; SocialLFG:SendUpdate() else SocialLFG:UnregisterLFG() end else SocialLFG:UpdateButtonState() end</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <!-- Register/Unregister Button -->
+        <Button name="SocialLFGRegisterButton" inherits="UIPanelButtonTemplate" text="Register LFG">
+            <Size y="30"/>
+            <Anchors>
+                <Anchor point="LEFT" relativeTo="SocialLFGFrame" x="20"/>
+                <Anchor point="RIGHT" relativeTo="SocialLFGFrame" x="-20"/>
+                <Anchor point="TOP" relativeTo="SocialLFGTankCheck" relativePoint="BOTTOM" y="-10"/>
+            </Anchors>
+            <Scripts>
+                <OnClick>SocialLFG:ToggleLFG()</OnClick>
+            </Scripts>
+        </Button>
+        
+        <!-- Scroll Frame for Member List -->
+        <ScrollFrame name="SocialLFGScrollFrame" inherits="UIPanelScrollFrameTemplate">
+            <Size x="760" y="350"/>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGRegisterButton" relativePoint="BOTTOMLEFT" x="-10" y="-40"/></Anchors>
+            <ScrollChild>
+                <Frame name="SocialLFGScrollChild">
+                    <Size x="760" y="1"/>
+                </Frame>
+            </ScrollChild>
+        </ScrollFrame>
+    </Frames>
+    
+    <Scripts>
+        <OnLoad>
+            if SocialLFG then
+                SocialLFG:OnLoad()
+            else
+                -- Defer initialization until addon is fully loaded
+                self:RegisterEvent("ADDON_LOADED")
+                self:SetScript("OnEvent", function(frame, event, addon)
+                    if event == "ADDON_LOADED" and addon == "SocialLFG" and SocialLFG then
+                        SocialLFG:OnLoad()
+                        frame:UnregisterEvent("ADDON_LOADED")
+                    end
+                end)
+            end
+        </OnLoad>
+        <OnShow>if SocialLFG then SocialLFG:OnShow() end</OnShow>
+        <OnHide>if SocialLFG then SocialLFG:OnHide() end</OnHide>
+    </Scripts>
 </Frame>
 </Ui>
