@@ -2,7 +2,7 @@
 ## Title: SocialLFG
 ## Notes: Social Looking for Group addon
 ## Author: GitHub Copilot
-## Version: 1.7
+## Version: 1.0 Beta
 ## SavedVariables: SocialLFGDB
 
 SocialLFG.lua
