@@ -37,6 +37,7 @@ Core\Init.lua
 Modules\Communication.lua
 Modules\Player.lua
 Modules\Members.lua
+Modules\Metrics.lua
 
 # =============================================================================
 # UI

@@ -263,6 +263,9 @@ end
 
 function UI:DoUpdateList()
     listState.lastUpdateTime = GetTime()
+
+    local Metrics = Addon.Metrics
+    if Metrics and Metrics.enabled then Metrics:RecordStart("UI:DoUpdateList") end
     
     -- Release all current rows
     RowPool:ReleaseAll()
@@ -293,9 +296,14 @@ function UI:DoUpdateList()
     local childHeight = #members * Addon.Constants.ROW_HEIGHT
     listState.scrollChild:SetHeight(math.max(1, childHeight))
     SocialLFGScrollFrame:UpdateScrollChildRect()
+
+    if Metrics and Metrics.enabled then Metrics:RecordEnd("UI:DoUpdateList") end
 end
 
 function UI:UpdateRow(row, memberData, index, currentPlayerName)
+    local Metrics = Addon.Metrics
+    if Metrics and Metrics.enabled then Metrics:RecordStart("UI:UpdateRow") end
+
     local playerName = memberData.name
     local status = memberData.status or {}
     local charName = Utils:ExtractCharacterName(playerName) or playerName
@@ -325,6 +333,7 @@ function UI:UpdateRow(row, memberData, index, currentPlayerName)
        and cache.keystoneStr == keystoneStr
        and cache.isSelf == isSelf
        and cache.bgIsEven == bgIsEven then
+        if Metrics and Metrics.enabled then Metrics:RecordEnd("UI:UpdateRow") end
         return
     end
 
@@ -412,6 +421,8 @@ function UI:UpdateRow(row, memberData, index, currentPlayerName)
         isSelf = isSelf,
         bgIsEven = bgIsEven,
     }
+
+    if Metrics and Metrics.enabled then Metrics:RecordEnd("UI:UpdateRow") end
 end
 
 -- =============================================================================

@@ -41,6 +41,9 @@ Addon.Constants = {
     -- Pooling
     ROW_POOL_PREALLOCATE = 50,        -- Number of rows to pre-create at init to avoid allocations during refresh
     
+    -- Metrics
+    METRICS_ENABLED = true,          -- Enable runtime metrics collection (off by default)
+    
     -- Game Data
     CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon", "Boosting", "PVP"},
     ROLES = {"Tank", "Heal", "DPS"},
@@ -129,6 +132,11 @@ function Addon:Initialize()
     self.Communication:Initialize()
     self.Player:Initialize()
     self.Members:Initialize()
+
+    -- Optional: initialize metrics module (separate file, opt-in)
+    if self.Metrics and type(self.Metrics.Initialize) == "function" then
+        self.Metrics:Initialize()
+    end
     
     -- Register addon message prefix
     C_ChatInfo.RegisterAddonMessagePrefix(self.Constants.PREFIX)
