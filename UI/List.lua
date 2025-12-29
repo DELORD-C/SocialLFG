@@ -54,6 +54,8 @@ function RowPool:Release(frame)
     if frame.playerName then
         frame.playerName = nil
     end
+    -- Clear cached visual state
+    frame._cache = nil
     
     -- Move to pool
     for i, activeFrame in ipairs(self.active) do
@@ -72,6 +74,7 @@ function RowPool:ReleaseAll()
         frame:Hide()
         frame:ClearAllPoints()
         frame.playerName = nil
+        frame._cache = nil
         table.insert(self.pool, frame)
     end
     wipe(self.active)
@@ -294,74 +297,121 @@ end
 
 function UI:UpdateRow(row, memberData, index, currentPlayerName)
     local playerName = memberData.name
-    local status = memberData.status
+    local status = memberData.status or {}
     local charName = Utils:ExtractCharacterName(playerName) or playerName
-    
-    -- Store data on row
+
+    -- Compute display values
+    local isSelf = (charName == currentPlayerName)
+    local class = status.class
+    local rolesString = status.roles and table.concat(status.roles, ",") or ""
+    local categoriesString = status.categories and table.concat(status.categories, ", ") or ""
+    local ilvlStr = tostring(status.ilvl or 0)
+    local rioStr = tostring(status.rio or 0)
+    local keystoneStr = status.keystone or L["NO_KEYSTONE"]
+    local nameTextStr = class and Utils:GetColoredName(charName, class) or charName
+    local bgIsEven = (index % 2 == 0)
+
+    local cache = row._cache
+
+    -- Fast path: nothing changed
+    if cache
+       and cache.playerFullName == playerName
+       and cache.nameTextStr == nameTextStr
+       and cache.class == class
+       and cache.rolesString == rolesString
+       and cache.categoriesString == categoriesString
+       and cache.ilvlStr == ilvlStr
+       and cache.rioStr == rioStr
+       and cache.keystoneStr == keystoneStr
+       and cache.isSelf == isSelf
+       and cache.bgIsEven == bgIsEven then
+        return
+    end
+
+    -- Store basic data on row
     row.playerName = charName
     row.playerFullName = playerName
     row.charName = charName
-    
-    -- Alternating background
-    if index % 2 == 0 then
-        row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.3)
-    else
-        row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.1)
+
+    -- Background: update only if parity changed
+    if not cache or cache.bgIsEven ~= bgIsEven then
+        if bgIsEven then
+            row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.3)
+        else
+            row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.1)
+        end
     end
-    
-    -- Class icon
-    if status.class then
-        Utils:SetClassIcon(row.classIcon, status.class)
-    else
-        row.classIcon:Hide()
+
+    -- Class icon: update only if changed
+    if not cache or cache.class ~= class then
+        if class then
+            Utils:SetClassIcon(row.classIcon, class)
+            row.classIcon:Show()
+        else
+            row.classIcon:Hide()
+        end
     end
-    
-    -- Name with class color
-    if status.class then
-        row.nameText:SetText(Utils:GetColoredName(charName, status.class))
-    else
-        row.nameText:SetText(charName)
+
+    -- Name text
+    if (row.nameText:GetText() or "") ~= nameTextStr then
+        row.nameText:SetText(nameTextStr)
     end
-    
+
     -- Role icons
-    for i, icon in ipairs(row.roleIcons) do
-        icon:Hide()
-    end
-    
-    if status.roles then
-        for i, role in ipairs(status.roles) do
-            if row.roleIcons[i] then
-                row.roleIcons[i]:SetAtlas(Utils:GetRoleAtlas(role), true)
-                row.roleIcons[i]:Show()
+    if not cache or cache.rolesString ~= rolesString then
+        for i, icon in ipairs(row.roleIcons) do
+            icon:Hide()
+        end
+        if status.roles then
+            for i, role in ipairs(status.roles) do
+                if row.roleIcons[i] then
+                    row.roleIcons[i]:SetAtlas(Utils:GetRoleAtlas(role), true)
+                    row.roleIcons[i]:Show()
+                end
             end
         end
     end
-    
+
     -- Categories
-    if status.categories then
-        row.categoriesText:SetText(table.concat(status.categories, ", "))
-    else
-        row.categoriesText:SetText("")
+    if (row.categoriesText:GetText() or "") ~= categoriesString then
+        row.categoriesText:SetText(categoriesString)
     end
-    
-    -- iLvL
-    row.ilvlText:SetText(tostring(status.ilvl or 0))
-    
-    -- Rio
-    row.rioText:SetText(tostring(status.rio or 0))
-    
-    -- Keystone
-    row.keystoneText:SetText(status.keystone or L["NO_KEYSTONE"])
-    
-    -- Show/hide action buttons (hide for self)
-    local isSelf = charName == currentPlayerName
-    if isSelf then
-        row.inviteBtn:Hide()
-        row.whisperBtn:Hide()
-    else
-        row.inviteBtn:Show()
-        row.whisperBtn:Show()
+
+    -- iLvL / Rio / Keystone
+    if (row.ilvlText:GetText() or "") ~= ilvlStr then
+        row.ilvlText:SetText(ilvlStr)
     end
+    if (row.rioText:GetText() or "") ~= rioStr then
+        row.rioText:SetText(rioStr)
+    end
+    if (row.keystoneText:GetText() or "") ~= keystoneStr then
+        row.keystoneText:SetText(keystoneStr)
+    end
+
+    -- Action buttons
+    if not cache or cache.isSelf ~= isSelf then
+        if isSelf then
+            row.inviteBtn:Hide()
+            row.whisperBtn:Hide()
+        else
+            row.inviteBtn:Show()
+            row.whisperBtn:Show()
+        end
+    end
+
+    -- Update cache
+    row._cache = {
+        playerFullName = playerName,
+        nameTextStr = nameTextStr,
+        class = class,
+        rolesString = rolesString,
+        categoriesString = categoriesString,
+        ilvlStr = ilvlStr,
+        rioStr = rioStr,
+        keystoneStr = keystoneStr,
+        isSelf = isSelf,
+        bgIsEven = bgIsEven,
+    }
 end
 
 -- =============================================================================
