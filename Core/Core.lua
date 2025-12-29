@@ -40,7 +40,8 @@ Addon.Constants = {
     
     -- Pooling
     ROW_POOL_PREALLOCATE = 50,        -- Number of rows to pre-create at init to avoid allocations during refresh
-    
+        -- UI timings
+    REGISTER_COOLDOWN = 2,            -- Seconds to block the register button after click
     -- Metrics
     METRICS_ENABLED = true,          -- Enable runtime metrics collection (off by default)
     
@@ -112,6 +113,8 @@ Addon.runtime = {
     -- Timers
     updateTimer = nil,
     pendingBroadcast = nil,
+
+    -- Flags
 }
 
 -- =============================================================================
@@ -197,10 +200,10 @@ end
 
 function Addon:Register(categories, roles)
     if not self:CanRegister() then
-        self:LogWarn(L["ERR_CANNOT_REGISTER"])
+        self:LogWarn(L["ERR_CANNOT_REGISTER"]) 
         return false
     end
-    
+
     -- Validate input
     if not categories or #categories == 0 then
         self:LogWarn(L["ERR_SELECT_CATEGORY"])

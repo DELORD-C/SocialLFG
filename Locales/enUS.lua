@@ -33,6 +33,7 @@ SocialLFG_RegisterLocale("enUS", {
     -- Buttons
     ["BTN_REGISTER"] = "Register LFG",
     ["BTN_UNREGISTER"] = "Unregister",
+    ["BTN_WORKING"] = "Working...",
     ["BTN_IN_GROUP"] = "In a group",
     ["BTN_SELECT_FIRST"] = "Select categories and roles",
     ["BTN_INVITE"] = "Invite",

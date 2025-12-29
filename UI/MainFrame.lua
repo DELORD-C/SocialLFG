@@ -87,19 +87,34 @@ end
 function UI:UpdateButtonState()
     local btn = SocialLFGRegisterButton
     if not btn then return end
-    
+
+    local now = GetTime()
+    if btn._cooldownUntil and now < btn._cooldownUntil then
+        -- Visually and functionally disable the button during cooldown
+        btn:SetText(L["BTN_WORKING"])
+        btn:Disable()
+        btn:EnableMouse(false)
+        btn:SetAlpha(0.6)
+        return
+    end
+
+    -- Restore appearance if out of cooldown
+    btn:EnableMouse(true)
+    btn:SetAlpha(1)
+
     local inGroup = IsInGroup()
-    
+
     if inGroup then
         btn:SetText(L["BTN_IN_GROUP"])
         btn:Disable()
+        btn:EnableMouse(false)
     elseif Addon:IsRegistered() then
         btn:SetText(L["BTN_UNREGISTER"])
         btn:Enable()
     else
         local categories = self:GetCheckedCategories()
         local roles = self:GetCheckedRoles()
-        
+
         if #categories > 0 and #roles > 0 then
             btn:SetText(L["BTN_REGISTER"])
             btn:Enable()
@@ -281,8 +296,42 @@ end
 -- =============================================================================
 
 function UI:OnRegisterClick()
+    local btn = SocialLFGRegisterButton
+    if not btn or not btn:IsEnabled() then return end
+
+    -- Set a cooldown on the button to prevent spamming
+    local cooldown = Addon.Constants.REGISTER_COOLDOWN or 2
+    btn._cooldownUntil = GetTime() + cooldown
+
+    -- Visually and functionally disable the button
+    btn:SetText(L["BTN_WORKING"])
+    btn:Disable()
+    btn:EnableMouse(false)
+    btn:SetAlpha(0.6)
+
+    -- Remove click handler to be extra-safe, store original
+    if not btn._origOnClick then
+        btn._origOnClick = btn:GetScript("OnClick")
+    end
+    btn:SetScript("OnClick", function() end)
+
     Addon:Toggle()
-    self:UpdateButtonState()
+
+    -- Restore after cooldown
+    C_Timer.After(cooldown, function()
+        if not btn then return end
+        btn._cooldownUntil = nil
+
+        -- Restore click handler
+        if btn._origOnClick then
+            btn:SetScript("OnClick", btn._origOnClick)
+            btn._origOnClick = nil
+        end
+
+        btn:EnableMouse(true)
+        btn:SetAlpha(1)
+        UI:UpdateButtonState()
+    end)
 end
 
 -- =============================================================================
