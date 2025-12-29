@@ -38,6 +38,9 @@ Addon.Constants = {
     FRAME_WIDTH = 800,
     FRAME_HEIGHT = 600,
     
+    -- Pooling
+    ROW_POOL_PREALLOCATE = 50,        -- Number of rows to pre-create at init to avoid allocations during refresh
+    
     -- Game Data
     CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon", "Boosting", "PVP"},
     ROLES = {"Tank", "Heal", "DPS"},

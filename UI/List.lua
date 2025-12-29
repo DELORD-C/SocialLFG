@@ -25,6 +25,12 @@ function RowPool:Initialize(parent)
     self.parent = parent
     wipe(self.pool)
     wipe(self.active)
+
+    -- Pre-allocate a number of rows to avoid allocations during first refresh
+    local prealloc = Addon.Constants.ROW_POOL_PREALLOCATE or 0
+    if prealloc > 0 then
+        self:Preallocate(prealloc)
+    end
 end
 
 function RowPool:Acquire()
@@ -180,6 +186,15 @@ function RowPool:CreateRow()
     end)
     
     return frame
+end
+
+function RowPool:Preallocate(n)
+    n = n or 0
+    for i = 1, n do
+        local f = self:CreateRow()
+        f:Hide()
+        table.insert(self.pool, f)
+    end
 end
 
 -- =============================================================================
