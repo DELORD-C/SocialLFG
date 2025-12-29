@@ -12,6 +12,33 @@ local CONSTANTS = {
     ROLES = {"Tank", "Heal", "DPS"},
 }
 
+-- StaticPopup to notify missing RaiderIO
+StaticPopupDialogs["SOCIALLFG_RIO_MISSING"] = {
+    text = "Avec l'add-on RaiderIO, vous aurez des informations plus précises.",
+    button1 = "Ne plus afficher",
+    button2 = "Fermer",
+    OnAccept = function()
+        if SocialLFG and SocialLFG.db then
+            SocialLFG.db.rioNoticeDismissed = true
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function SocialLFG:ShowRioMissingPopup()
+    if not self.db or self.db.rioNoticeDismissed then
+        return
+    end
+    if IsAddOnLoaded and (IsAddOnLoaded("RaiderIO") or RaiderIO) then
+        return
+    end
+    StaticPopup_Show("SOCIALLFG_RIO_MISSING")
+end
+
+
 -- Logging utilities with consistent formatting
 local function Log(level, msg)
     if msg and msg ~= "" then
@@ -931,6 +958,7 @@ end
 function SocialLFG:GetRioScore()
     -- Verify RaiderIO addon is available
     if not RaiderIO then
+        self:ShowRioMissingPopup()
         return 0
     end
     
