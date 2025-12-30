@@ -12,7 +12,7 @@ SocialLFG_RegisterLocale("frFR", {
     ["CATEGORY_MYTHIC"] = "Mythique+",
     ["CATEGORY_QUESTING"] = "Quêtes",
     ["CATEGORY_DUNGEON"] = "Donjon",
-    ["CATEGORY_BOOSTING"] = "Boosting",
+    ["CATEGORY_BOOSTING"] = "Boost",
     ["CATEGORY_PVP"] = "JcJ",
     
     -- Roles
@@ -21,7 +21,7 @@ SocialLFG_RegisterLocale("frFR", {
     ["ROLE_DPS"] = "DPS",
     
     -- UI Labels
-    ["LABEL_CATEGORY"] = "Catégorie :",
+    ["LABEL_CATEGORY"] = "Catégories :",
     ["LABEL_ROLES"] = "Rôles :",
     ["LABEL_MEMBERS"] = "Membres LFG :",
     ["LABEL_NAME"] = "Nom",

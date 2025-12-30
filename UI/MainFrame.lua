@@ -14,6 +14,39 @@ local UI = Addon.UI
 -- Frame Setup
 -- =============================================================================
 
+function UI:LocalizeTexts()
+    -- Localize static UI text
+    if SocialLFGTitle then SocialLFGTitle:SetText(L["ADDON_NAME"]) end
+    if SocialLFGCategoryLabel then SocialLFGCategoryLabel:SetText(L["LABEL_CATEGORY"]) end
+    if SocialLFGRoleLabel then SocialLFGRoleLabel:SetText(L["LABEL_ROLES"]) end
+    if SocialLFGMembersLabel then SocialLFGMembersLabel:SetText(L["LABEL_MEMBERS"]) end
+
+    -- Column headers
+    if SocialLFGNameHeader then SocialLFGNameHeader:SetText(L["LABEL_NAME"]) end
+    if SocialLFGRolesHeader then SocialLFGRolesHeader:SetText(L["LABEL_ROLES"]) end
+    if SocialLFGCategoriesHeader then SocialLFGCategoriesHeader:SetText(L["LABEL_CATEGORIES"]) end
+    if SocialLFGILVLHeader then SocialLFGILVLHeader:SetText(L["LABEL_ILVL"]) end
+    if SocialLFGRioHeader then SocialLFGRioHeader:SetText(L["LABEL_RIO"]) end
+    if SocialLFGKeystoneHeader then SocialLFGKeystoneHeader:SetText(L["LABEL_KEYSTONE"]) end
+
+    -- Checkbox labels (categories)
+    if SocialLFGRaidCheck and SocialLFGRaidCheck.SetText then SocialLFGRaidCheck:SetText(L["CATEGORY_RAID"]) end
+    if SocialLFGMythicCheck and SocialLFGMythicCheck.SetText then SocialLFGMythicCheck:SetText(L["CATEGORY_MYTHIC"]) end
+    if SocialLFGQuestingCheck and SocialLFGQuestingCheck.SetText then SocialLFGQuestingCheck:SetText(L["CATEGORY_QUESTING"]) end
+    if SocialLFGBoostingCheck and SocialLFGBoostingCheck.SetText then SocialLFGBoostingCheck:SetText(L["CATEGORY_BOOSTING"]) end
+
+    -- Also set text for explicitly named labels (covers templates using FontString children)
+    if SocialLFGQuestingLabel then SocialLFGQuestingLabel:SetText(L["CATEGORY_QUESTING"]) end
+    if SocialLFGBoostingLabel then SocialLFGBoostingLabel:SetText(L["CATEGORY_BOOSTING"]) end
+    if SocialLFGPVPCheck and SocialLFGPVPCheck.SetText then SocialLFGPVPCheck:SetText(L["CATEGORY_PVP"]) end
+
+    -- Role checkbox labels
+    if SocialLFGTankCheck and SocialLFGTankCheck.SetText then SocialLFGTankCheck:SetText(L["ROLE_TANK"]) end
+    if SocialLFGHealCheck and SocialLFGHealCheck.SetText then SocialLFGHealCheck:SetText(L["ROLE_HEAL"]) end
+    if SocialLFGDPSCheck and SocialLFGDPSCheck.SetText then SocialLFGDPSCheck:SetText(L["ROLE_DPS"]) end
+end
+
+
 function UI:SetupMainFrame()
     local frame = SocialLFGFrame
     if not frame then return end
@@ -26,7 +59,10 @@ function UI:SetupMainFrame()
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
     frame:SetFrameStrata("DIALOG")
     frame:SetFrameLevel(100)
-    
+
+    -- Apply localization immediately
+    self:LocalizeTexts()
+
     -- Set up show/hide handlers
     frame:SetScript("OnShow", function()
         UI:OnShow()
@@ -42,6 +78,9 @@ end
 -- =============================================================================
 
 function UI:OnShow()
+    -- Ensure localized texts are applied (in case locale changed or initialization order differed)
+    self:LocalizeTexts()
+
     -- Initialize list if needed
     self:InitializeList()
     
