@@ -1,0 +1,257 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/..\FrameXML\UI.xsd">
+
+<!-- Main SocialLFG Frame -->
+<Frame name="SocialLFGFrame" parent="UIParent" hidden="true">
+    <Size x="650" y="550"/>
+    <Anchors>
+        <Anchor point="CENTER"/>
+    </Anchors>
+    
+    <!-- Background -->
+    <Layers>
+        <Layer level="BACKGROUND">
+            <Texture setAllPoints="true">
+                <Color r="0.05" g="0.05" b="0.05" a="0.92"/>
+            </Texture>
+        </Layer>
+        
+        <!-- Border -->
+        <Layer level="BORDER">
+            <Texture name="$parentBorderTop">
+                <Size x="650" y="2"/>
+                <Anchors><Anchor point="TOP"/></Anchors>
+                <Color r="0.4" g="0.4" b="0.4" a="1"/>
+            </Texture>
+            <Texture name="$parentBorderBottom">
+                <Size x="650" y="2"/>
+                <Anchors><Anchor point="BOTTOM"/></Anchors>
+                <Color r="0.4" g="0.4" b="0.4" a="1"/>
+            </Texture>
+            <Texture name="$parentBorderLeft">
+                <Size x="2" y="550"/>
+                <Anchors><Anchor point="LEFT"/></Anchors>
+                <Color r="0.4" g="0.4" b="0.4" a="1"/>
+            </Texture>
+            <Texture name="$parentBorderRight">
+                <Size x="2" y="550"/>
+                <Anchors><Anchor point="RIGHT"/></Anchors>
+                <Color r="0.4" g="0.4" b="0.4" a="1"/>
+            </Texture>
+        </Layer>
+        
+        <!-- Header and Labels -->
+        <Layer level="OVERLAY">
+            <!-- Title -->
+            <FontString name="SocialLFGTitle" inherits="GameFontNormalLarge" text="Social LFG">
+                <Anchors><Anchor point="TOP" x="0" y="-12"/></Anchors>
+            </FontString>
+            
+            <!-- Section: Categories -->
+            <FontString name="SocialLFGCategoryLabel" inherits="GameFontNormal" text="Categories:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-45"/></Anchors>
+                <Color r="1" g="0.82" b="0"/>
+            </FontString>
+            
+            <!-- Section: Roles -->
+            <FontString name="SocialLFGRoleLabel" inherits="GameFontNormal" text="Roles:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-85"/></Anchors>
+                <Color r="1" g="0.82" b="0"/>
+            </FontString>
+            
+            <!-- Section: Members List -->
+            <FontString name="SocialLFGMembersLabel" inherits="GameFontNormal" text="LFG Members:">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-175"/></Anchors>
+                <Color r="1" g="0.82" b="0"/>
+            </FontString>
+            
+            <!-- Column Headers - aligned with COLUMNS constants (offset by scroll frame x=10) -->
+            <FontString name="SocialLFGColName" inherits="GameFontHighlightSmall" text="Name">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColRoles" inherits="GameFontHighlightSmall" text="Roles">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="125" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColCategories" inherits="GameFontHighlightSmall" text="Categories">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="185" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColIlvl" inherits="GameFontHighlightSmall" text="iLvl">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="310" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColRio" inherits="GameFontHighlightSmall" text="M+ Score">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="345" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColKeystone" inherits="GameFontHighlightSmall" text="Key">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="405" y="-193"/></Anchors>
+            </FontString>
+            <FontString name="SocialLFGColActions" inherits="GameFontHighlightSmall" text="Actions">
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="470" y="-193"/></Anchors>
+            </FontString>
+            
+            <!-- Header separator line -->
+            <Texture name="$parentHeaderLine">
+                <Size x="610" y="1"/>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-205"/></Anchors>
+                <Color r="0.3" g="0.3" b="0.3" a="1"/>
+            </Texture>
+        </Layer>
+    </Layers>
+    
+    <Frames>
+        <!-- Close Button -->
+        <Button name="SocialLFGCloseButton" inherits="UIPanelCloseButton">
+            <Anchors><Anchor point="TOPRIGHT" relativeTo="SocialLFGFrame" x="-3" y="-3"/></Anchors>
+        </Button>
+        
+        <!-- ============================================= -->
+        <!-- Category Checkboxes - Consistent 100px spacing -->
+        <!-- ============================================= -->
+        <CheckButton name="SocialLFGRaidCheck" inherits="UICheckButtonTemplate" text="Raid">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="90" y="-42"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGMythicCheck" inherits="UICheckButtonTemplate" text="Mythic+">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGRaidCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGQuestingCheck" inherits="UICheckButtonTemplate" text="Questing">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGMythicCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGBoostingCheck" inherits="UICheckButtonTemplate" text="Boosting">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGQuestingCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGPVPCheck" inherits="UICheckButtonTemplate" text="PvP">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGBoostingCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <!-- ============================================= -->
+        <!-- Role Checkboxes - Consistent 90px spacing -->
+        <!-- ============================================= -->
+        <CheckButton name="SocialLFGTankCheck" inherits="UICheckButtonTemplate" text="Tank">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="90" y="-82"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGHealCheck" inherits="UICheckButtonTemplate" text="Healer">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGTankCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <CheckButton name="SocialLFGDPSCheck" inherits="UICheckButtonTemplate" text="DPS">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="LEFT" relativeTo="SocialLFGHealCheck" relativePoint="LEFT" x="90" y="0"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnCheckboxClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
+        <!-- ============================================= -->
+        <!-- Register/Unregister Button -->
+        <!-- ============================================= -->
+        <Button name="SocialLFGRegisterButton" inherits="UIPanelButtonTemplate" text="Register LFG">
+            <Size x="200" y="26"/>
+            <Anchors>
+                <Anchor point="TOP" relativeTo="SocialLFGFrame" x="0" y="-115"/>
+            </Anchors>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnRegisterClick()</OnClick>
+            </Scripts>
+        </Button>
+        
+        <!-- Separator line after controls -->
+        <Frame name="SocialLFGControlSeparator">
+            <Size x="610" y="1"/>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-150"/></Anchors>
+            <Layers>
+                <Layer level="ARTWORK">
+                    <Texture setAllPoints="true">
+                        <Color r="0.25" g="0.25" b="0.25" a="1"/>
+                    </Texture>
+                </Layer>
+            </Layers>
+        </Frame>
+        
+        <!-- ============================================= -->
+        <!-- Scroll Frame for Member List -->
+        <!-- ============================================= -->
+        <ScrollFrame name="SocialLFGScrollFrame" inherits="UIPanelScrollFrameTemplate">
+            <Size x="610" y="320"/>
+            <Anchors>
+                <Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="10" y="-210"/>
+            </Anchors>
+            <ScrollChild>
+                <Frame name="SocialLFGScrollChild">
+                    <Size x="590" y="1"/>
+                </Frame>
+            </ScrollChild>
+        </ScrollFrame>
+    </Frames>
+    
+    <Scripts>
+        <OnLoad>
+            -- Frame setup happens through the Core initialization
+            -- This just ensures the frame is ready
+        </OnLoad>
+    </Scripts>
+</Frame>
+
+</Ui>

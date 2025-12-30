@@ -1,18 +1,53 @@
-## Interface: 110000
+## Interface: 110005
 ## Title: SocialLFG
 ## Notes: Social Looking for Group - Share your LFG status with guild and friends. Register with categories (Raid, Mythic+, Questing) and roles, view registered players with iLvl and Raider.IO scores, and invite with one click. Type /slfg to open.
+## Notes-frFR: Social Looking for Group - Partagez votre statut LFG avec votre guilde et vos amis. Inscrivez-vous avec des catégories (Raid, Mythic+, Quêtes) et rôles, visualisez les joueurs inscrits avec leur iLvl et scores Raider.IO, et invitez en un clic. Tapez /slfg pour ouvrir.
 ## Author: GitHub Copilot
-## Version: 1.2.1
+## Version: 2.0.0
 ## SavedVariables: SocialLFGDB, SocialLFGLDBIconDB
-## OptionalDeps: Raider.IO
+## OptionalDeps: RaiderIO
 ## IconTexture: Interface\AddOns\SocialLFG\icon
 
+# =============================================================================
 # Libraries (embedded)
-embeds.xml
+# =============================================================================
+Libs\LibStub\LibStub.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\lib.xml
 
-# Main addon files
-SocialLFG.lua
-SocialLFG.xml
+# =============================================================================
+# Localization (load first)
+# =============================================================================
+Locales\Locales.lua
+Locales\enUS.lua
+Locales\frFR.lua
 
-# Data broker (minimap button)
+# =============================================================================
+# Core Modules
+# =============================================================================
+Core\Core.lua
+Core\Database.lua
+Core\Utils.lua
+Core\NameUtils.lua
+Core\Events.lua
+Core\Init.lua
+
+# =============================================================================
+# Feature Modules
+# =============================================================================
+Modules\Communication.lua
+Modules\Player.lua
+Modules\Members.lua
+Modules\Metrics.lua
+
+# =============================================================================
+# UI
+# =============================================================================
+UI\Templates.xml
+UI\MainFrame.lua
+UI\List.lua
+
+# =============================================================================
+# Data Broker (minimap button)
+# =============================================================================
 ldb.lua
