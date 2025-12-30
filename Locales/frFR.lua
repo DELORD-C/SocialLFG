@@ -29,6 +29,8 @@ SocialLFG_RegisterLocale("frFR", {
     ["LABEL_RIO"] = "Rio",
     ["LABEL_KEYSTONE"] = "Clé",
     ["LABEL_CATEGORIES"] = "Catégories",
+    ["LABEL_ACTIONS"] = "Actions",
+    ["LABEL_KEY_LEVEL"] = "Niveau de clé :",
     
     -- Buttons
     ["BTN_REGISTER"] = "S'inscrire LFG",

@@ -35,6 +35,37 @@ function UI:SetupMainFrame()
     frame:SetScript("OnHide", function()
         UI:OnHide()
     end)
+
+    -- Localize static texts
+    if SocialLFGTitle then SocialLFGTitle:SetText(L["ADDON_NAME"] or SocialLFGTitle:GetText()) end
+    if SocialLFGCategoryLabel then SocialLFGCategoryLabel:SetText(L["LABEL_CATEGORIES"] or SocialLFGCategoryLabel:GetText()) end
+    if SocialLFGRoleLabel then SocialLFGRoleLabel:SetText(L["LABEL_ROLES"] or SocialLFGRoleLabel:GetText()) end
+    if SocialLFGMembersLabel then SocialLFGMembersLabel:SetText(L["LABEL_MEMBERS"] or SocialLFGMembersLabel:GetText()) end
+
+    if SocialLFGColName then SocialLFGColName:SetText(L["LABEL_NAME"] or SocialLFGColName:GetText()) end
+    if SocialLFGColRoles then SocialLFGColRoles:SetText(L["LABEL_ROLES"] or SocialLFGColRoles:GetText()) end
+    if SocialLFGColCategories then SocialLFGColCategories:SetText(L["LABEL_CATEGORIES"] or SocialLFGColCategories:GetText()) end
+    if SocialLFGColIlvl then SocialLFGColIlvl:SetText(L["LABEL_ILVL"] or SocialLFGColIlvl:GetText()) end
+    if SocialLFGColRio then SocialLFGColRio:SetText(L["LABEL_RIO"] or SocialLFGColRio:GetText()) end
+    if SocialLFGColKeystone then SocialLFGColKeystone:SetText(L["LABEL_KEYSTONE"] or SocialLFGColKeystone:GetText()) end
+    if SocialLFGColActions then SocialLFGColActions:SetText(L["LABEL_ACTIONS"] or SocialLFGColActions:GetText()) end
+
+    -- Category checkboxes
+    if SocialLFGRaidCheck then SocialLFGRaidCheck:SetText(L["CATEGORY_RAID"] or SocialLFGRaidCheck:GetText()) end
+    if SocialLFGMythicCheck then SocialLFGMythicCheck:SetText(L["CATEGORY_MYTHIC"] or SocialLFGMythicCheck:GetText()) end
+    if SocialLFGQuestingCheck then SocialLFGQuestingCheck:SetText(L["CATEGORY_QUESTING"] or SocialLFGQuestingCheck:GetText()) end
+    if SocialLFGBoostingCheck then SocialLFGBoostingCheck:SetText(L["CATEGORY_BOOSTING"] or SocialLFGBoostingCheck:GetText()) end
+    if SocialLFGPVPCheck then SocialLFGPVPCheck:SetText(L["CATEGORY_PVP"] or SocialLFGPVPCheck:GetText()) end
+
+    -- Role checkboxes
+    if SocialLFGTankCheck then SocialLFGTankCheck:SetText(L["ROLE_TANK"] or SocialLFGTankCheck:GetText()) end
+    if SocialLFGHealCheck then SocialLFGHealCheck:SetText(L["ROLE_HEAL"] or SocialLFGHealCheck:GetText()) end
+    if SocialLFGDPSCheck then SocialLFGDPSCheck:SetText(L["ROLE_DPS"] or SocialLFGDPSCheck:GetText()) end
+
+    -- Controls
+    if SocialLFGKeyLevelLabel then SocialLFGKeyLevelLabel:SetText(L["LABEL_KEY_LEVEL"] or SocialLFGKeyLevelLabel:GetText()) end
+    if SocialLFGRegisterButton then SocialLFGRegisterButton:SetText(L["BTN_REGISTER"] or SocialLFGRegisterButton:GetText()) end
+
 end
 
 -- =============================================================================
