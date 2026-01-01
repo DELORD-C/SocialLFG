@@ -156,7 +156,7 @@ function RowPool:CreateRow()
             GameTooltip:AddLine(self.playerFullName, 1, 1, 1)
             if self.statusInfo then
                 if self.statusInfo.categories and #self.statusInfo.categories > 0 then
-                    GameTooltip:AddLine(table.concat(self.statusInfo.categories, ", "), 0.7, 0.7, 0.7)
+                    GameTooltip:AddLine(Addon:GetCategoryListLocalized(self.statusInfo.categories), 0.7, 0.7, 0.7)
                 end
             end
             GameTooltip:Show()
@@ -493,7 +493,7 @@ function UI:UpdateRow(row, memberData, index, currentPlayerName, currentPlayerFu
     
     local class = status.class
     local rolesString = status.roles and table.concat(status.roles, ",") or ""
-    local categoriesString = status.categories and table.concat(status.categories, ", ") or ""
+    local categoriesString = Addon:GetCategoryListLocalized(status.categories)
     local ilvlStr = tostring(status.ilvl or 0)
     local rioStr = tostring(status.rio or 0)
     local keystoneStr = status.keystone or L["NO_KEYSTONE"]

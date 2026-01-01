@@ -64,6 +64,16 @@ Addon.Constants = {
     -- Game Data
     CATEGORIES = {"Raid", "Mythic+", "Questing", "Dungeon", "Boosting", "PVP"},
     ROLES = {"Tank", "Heal", "DPS"},
+
+    -- Mapping of canonical category -> locale key
+    CATEGORY_LOCALE_KEYS = {
+        ["Raid"] = "CATEGORY_RAID",
+        ["Mythic+"] = "CATEGORY_MYTHIC",
+        ["Questing"] = "CATEGORY_QUESTING",
+        ["Dungeon"] = "CATEGORY_DUNGEON",
+        ["Boosting"] = "CATEGORY_BOOSTING",
+        ["PVP"] = "CATEGORY_PVP",
+    },
     
     -- Class Role Mapping
     CLASS_ROLES = {
@@ -94,6 +104,36 @@ Addon.Constants = {
         [505] = "DB",
     },
 }
+
+-- Helper utilities
+-- Localized category labels based on constants' mapping keys
+function Addon:GetCategoryLabel(category)
+    if not category then return "" end
+    self._categoryLabelCache = self._categoryLabelCache or {}
+    if self._categoryLabelCache[category] then
+        return self._categoryLabelCache[category]
+    end
+    local key = self.Constants and self.Constants.CATEGORY_LOCALE_KEYS and self.Constants.CATEGORY_LOCALE_KEYS[category]
+    local label = category
+    if key and type(_G.SocialLFG_L) == "table" and _G.SocialLFG_L[key] then
+        label = _G.SocialLFG_L[key]
+    end
+    self._categoryLabelCache[category] = label
+    return label
+end
+
+function Addon:RefreshLocalizationCaches()
+    self._categoryLabelCache = nil
+end
+
+function Addon:GetCategoryListLocalized(list)
+    if not list or #list == 0 then return "" end
+    local out = {}
+    for _, c in ipairs(list) do
+        table.insert(out, self:GetCategoryLabel(c))
+    end
+    return table.concat(out, ", ")
+end
 
 -- =============================================================================
 -- State

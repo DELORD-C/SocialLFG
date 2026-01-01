@@ -282,6 +282,28 @@ function Utils:HashStatus(status)
         status.class or "",
         status.keystone or "",
     }
-    
+
+    -- Include QuickPlay metadata in the status hash so changes to QuickPlay preferences are detected
+    if status.quickPlay and status.quickPlay.enabled then
+        local qp = status.quickPlay
+        table.insert(parts, 'qp=1')
+        table.insert(parts, tostring(qp.keyLevel or 0))
+        -- deterministic intervals serialization
+        if qp.intervals then
+            local ids = {}
+            for id, enabled in pairs(qp.intervals) do
+                if enabled then table.insert(ids, id) end
+            end
+            table.sort(ids)
+            table.insert(parts, table.concat(ids, ","))
+        else
+            table.insert(parts, "")
+        end
+    else
+        table.insert(parts, 'qp=0')
+        table.insert(parts, '0')
+        table.insert(parts, '')
+    end
+
     return table.concat(parts, "|")
 end

@@ -37,6 +37,11 @@ function SocialLFG_RegisterLocale(locale, strings)
             L[key] = value
         end
     end
+
+    -- Notify addon code to refresh localization caches if present
+    if _G.SocialLFG and type(_G.SocialLFG.RefreshLocalizationCaches) == "function" then
+        pcall(function() _G.SocialLFG:RefreshLocalizationCaches() end)
+    end
 end
 
 -- Convenience function to get localized string

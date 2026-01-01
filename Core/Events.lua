@@ -61,6 +61,18 @@ handlers["GUILD_ROSTER_UPDATE"] = function()
     end
 end
 
+handlers["CLUB_ROSTER_UPDATE"] = function(...)
+    -- Community roster updated (club roster)
+    if not Addon.runtime.initialized then return end
+
+    -- If UI is visible, schedule immediate queries, otherwise trigger offline cleanup
+    if SocialLFGFrame and SocialLFGFrame:IsShown() then
+        Addon.Communication:ScheduleQuery()
+    else
+        Addon.Members:CleanupOfflinePlayers()
+    end
+end
+
 handlers["GROUP_FORMED"] = function()
     if not Addon.runtime.initialized then return end
     
@@ -119,6 +131,10 @@ function Events:Initialize()
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
     eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    -- Register club roster update only on clients that expose the Club API
+    if C_Club and C_Club.GetNumClubs then
+        eventFrame:RegisterEvent("CLUB_ROSTER_UPDATE")
+    end
     eventFrame:RegisterEvent("GROUP_FORMED")
     eventFrame:RegisterEvent("GROUP_LEFT")
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")

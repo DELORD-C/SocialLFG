@@ -456,24 +456,98 @@ function Comm:GetOnlineBNFriends()
     return friends
 end
 
+function Comm:GetOnlineCommunityMembers()
+    local members = {}
+    local seen = {}
+
+    -- Check for Club API availability
+    if not C_Club or not C_Club.GetNumClubs then
+        return members
+    end
+
+    local numClubs = C_Club.GetNumClubs()
+    if not numClubs or numClubs == 0 then
+        return members
+    end
+
+    for i = 1, numClubs do
+        -- Try to get a club id in a few ways depending on API availability
+        local clubId
+        if C_Club.GetClubIdFromIndex then
+            clubId = C_Club.GetClubIdFromIndex(i)
+        end
+        if not clubId and C_Club.GetClubInfo then
+            clubId = select(1, C_Club.GetClubInfo(i))
+        end
+
+        if clubId and C_Club.GetNumMembers and C_Club.GetMemberInfo then
+            local numMembers = C_Club.GetNumMembers(clubId)
+            if numMembers and numMembers > 0 then
+                for j = 1, numMembers do
+                    local memberInfo = C_Club.GetMemberInfo(clubId, j)
+                    if memberInfo then
+                        -- Determine online state from available fields
+                        local isOnline = memberInfo.isOnline or memberInfo.online or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.isOnline)
+                        if isOnline then
+                            -- Try to extract character name and realm from different possible structures
+                            local charName = memberInfo.characterName or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.characterName)
+                            local realm = memberInfo.characterRealm or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.realmName)
+
+                            if charName and charName ~= "" then
+                                local fullName
+                                if NameUtils and NameUtils.BuildFromFriendInfo then
+                                    -- If NameUtils provides a helper for building names from partial info
+                                    fullName = NameUtils:BuildFromFriendInfo(charName, realm)
+                                else
+                                    -- Fallback: manual construction (assume same-realm when realm missing)
+                                    if realm and realm ~= "" then
+                                        fullName = charName .. "-" .. realm:gsub("%s+", "")
+                                    else
+                                        local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+                                        fullName = charName .. "-" .. playerRealm:gsub("%s+", "")
+                                    end
+                                end
+
+                                if fullName and not seen[fullName] then
+                                    table.insert(members, fullName)
+                                    seen[fullName] = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return members
+end
+
 function Comm:GetAllOnlineFriends()
     local friends = {}
     local seen = {}
-    
+
     for _, name in ipairs(self:GetOnlineFriends()) do
         if not seen[name] then
             table.insert(friends, name)
             seen[name] = true
         end
     end
-    
+
     for _, name in ipairs(self:GetOnlineBNFriends()) do
         if not seen[name] then
             table.insert(friends, name)
             seen[name] = true
         end
     end
-    
+
+    for _, name in ipairs(self:GetOnlineCommunityMembers()) do
+        if not seen[name] then
+            table.insert(friends, name)
+            seen[name] = true
+        end
+    end
+
     return friends
 end
 

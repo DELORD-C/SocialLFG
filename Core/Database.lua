@@ -102,24 +102,30 @@ end
 -- =============================================================================
 
 function DB:IsRegistered()
-    return self.db.registration 
-        and self.db.registration.categories 
-        and #self.db.registration.categories > 0
+    local db = self.db or SocialLFGDB
+    if not db or not db.registration or not db.registration.categories then
+        return false
+    end
+    return #db.registration.categories > 0
 end
 
 function DB:GetRegistration()
-    return self.db.registration
+    local db = self.db or SocialLFGDB
+    return db and db.registration or { categories = {}, roles = {} }
 end
 
 function DB:GetCategories()
-    return self.db.registration.categories or {}
+    local db = self.db or SocialLFGDB
+    return (db and db.registration and db.registration.categories) or {}
 end
 
 function DB:GetRoles()
-    return self.db.registration.roles or {}
+    local db = self.db or SocialLFGDB
+    return (db and db.registration and db.registration.roles) or {}
 end
 
 function DB:SetRegistration(categories, roles)
+    self.db = self.db or SocialLFGDB or self:GetDefaultDB()
     self.db.registration = {
         categories = categories or {},
         roles = roles or {},
@@ -141,14 +147,17 @@ end
 -- =============================================================================
 
 function DB:GetSavedCategories()
-    return self.db.savedPreferences.categories or {}
+    local db = self.db or SocialLFGDB
+    return (db and db.savedPreferences and db.savedPreferences.categories) or {}
 end
 
 function DB:GetSavedRoles()
-    return self.db.savedPreferences.roles or {}
+    local db = self.db or SocialLFGDB
+    return (db and db.savedPreferences and db.savedPreferences.roles) or {}
 end
 
 function DB:SetSavedPreferences(categories, roles)
+    self.db = self.db or SocialLFGDB or self:GetDefaultDB()
     self.db.savedPreferences = {
         categories = categories or {},
         roles = roles or {},
@@ -160,10 +169,12 @@ end
 -- =============================================================================
 
 function DB:WasRegisteredBeforeGroup()
-    return self.db.wasRegisteredBeforeGroup
+    local db = self.db or SocialLFGDB
+    return (db and db.wasRegisteredBeforeGroup) or false
 end
 
 function DB:SetWasRegisteredBeforeGroup(value)
+    self.db = self.db or SocialLFGDB or self:GetDefaultDB()
     self.db.wasRegisteredBeforeGroup = value
 end
 
@@ -172,9 +183,11 @@ end
 -- =============================================================================
 
 function DB:IsRioNoticeDismissed()
-    return self.db.rioNoticeDismissed
+    local db = self.db or SocialLFGDB
+    return (db and db.rioNoticeDismissed) or false
 end
 
 function DB:DismissRioNotice()
+    self.db = self.db or SocialLFGDB or self:GetDefaultDB()
     self.db.rioNoticeDismissed = true
 end
