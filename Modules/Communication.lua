@@ -7,6 +7,20 @@
     - Query throttling per target
     - Broadcast debouncing
     - Deduplication of incoming messages
+    - Community (Club) support for same/connected realm members
+    - BNet cross-realm communication for Battle.net friends
+    
+    COMMUNICATION CHANNELS:
+    - GUILD: For guild members (uses SendAddonMessage with "GUILD" channel)
+    - WHISPER: For same/connected realm friends and community members
+    - BNET: For Battle.net friends (uses BNSendGameData, works cross-realm)
+    
+    LIMITATIONS:
+    - Community members who are NOT on same/connected realm AND are NOT BNet friends
+      cannot receive addon messages. This is a WoW API limitation.
+    - The addon will still show these players in the member list if they broadcast
+      to us (e.g., via guild or if they're in a community with shared BNet friends),
+      but we cannot initiate communication with them directly.
 ]]
 
 local Addon = _G.SocialLFG
@@ -153,6 +167,47 @@ function Comm:SendToGuild(message)
     end
 end
 
+-- Check if we can send an addon whisper to a target player
+-- Returns true if the player is on the same or connected realm
+function Comm:CanWhisperPlayer(target)
+    if not target then return false end
+    
+    -- Extract realm from target name
+    local targetRealm = nil
+    if NameUtils then
+        targetRealm = NameUtils:ExtractRealm(target)
+    else
+        local hyphenPos = target:find("-", 1, true)
+        if hyphenPos then
+            targetRealm = target:sub(hyphenPos + 1)
+        end
+    end
+    
+    if not targetRealm or targetRealm == "" then
+        -- No realm means same realm
+        return true
+    end
+    
+    -- Get player's realm (normalized)
+    local playerRealm = NameUtils and NameUtils:GetHomeRealm() or 
+                        (Addon.runtime.playerRealm or GetRealmName()):gsub("%s+", "")
+    
+    -- Same realm check (case-insensitive)
+    if targetRealm:lower() == playerRealm:lower() then
+        return true
+    end
+    
+    -- Connected realm check using GetAutoCompleteRealms
+    local connectedRealms = GetAutoCompleteRealms and GetAutoCompleteRealms() or {}
+    for _, connectedRealm in ipairs(connectedRealms) do
+        if targetRealm:lower() == connectedRealm:lower() then
+            return true
+        end
+    end
+    
+    return false
+end
+
 function Comm:SendToPlayer(message, target)
     if not target then return end
     
@@ -168,13 +223,22 @@ function Comm:SendToPlayer(message, target)
         target = NameUtils:ToCanonical(target) or target
     end
     
+    -- Check if we can actually whisper this player
+    if not self:CanWhisperPlayer(target) then
+        return -- Silently skip cross-realm players we can't whisper
+    end
+    
     QueueMessage(message, "WHISPER", target)
 end
 
 function Comm:SendToAllFriends(message)
-    local friends = self:GetAllOnlineFriends()
-    for _, fullName in ipairs(friends) do
-        self:SendToPlayer(message, fullName)
+    -- Send to all reachable players (deduplicated)
+    for _, playerInfo in ipairs(self:GetAllReachablePlayers()) do
+        if playerInfo.method == "BNET" and playerInfo.gameAccountID then
+            self:SendToBNetFriend(message, playerInfo.gameAccountID)
+        elseif playerInfo.method == "WHISPER" then
+            self:SendToPlayer(message, playerInfo.name)
+        end
     end
 end
 
@@ -245,10 +309,26 @@ function Comm:QueryAllPlayers()
         state.lastGuildQueryTime = now
     end
     
-    -- Query friends (with per-target throttle)
-    local friends = self:GetAllOnlineFriends()
-    for _, fullName in ipairs(friends) do
-        self:QueryPlayer(fullName)
+    -- Query all reachable players (unified, deduplicated)
+    for _, playerInfo in ipairs(self:GetAllReachablePlayers()) do
+        self:QueryPlayerByInfo(playerInfo)
+    end
+end
+
+function Comm:QueryPlayerByInfo(playerInfo)
+    if not playerInfo or not playerInfo.name then return end
+    
+    local now = GetTime()
+    local lastQuery = state.lastQueryTime[playerInfo.name] or 0
+    
+    -- Only query if enough time has passed
+    if now - lastQuery >= Addon.Constants.QUERY_THROTTLE then
+        if playerInfo.method == "BNET" and playerInfo.gameAccountID then
+            self:SendToBNetFriend("QUERY", playerInfo.gameAccountID)
+        elseif playerInfo.method == "WHISPER" then
+            self:SendToPlayer("QUERY", playerInfo.name)
+        end
+        state.lastQueryTime[playerInfo.name] = now
     end
 end
 
@@ -306,7 +386,7 @@ function Comm:HandleMessage(message, sender, channel)
     if command == "STATUS" then
         self:HandleStatusMessage(sender, parts)
     elseif command == "QUERY" then
-        self:HandleQueryMessage(sender)
+        self:HandleQueryMessage(sender, channel)
     elseif command == "UNREGISTER" then
         self:HandleUnregisterMessage(sender)
     end
@@ -367,12 +447,59 @@ function Comm:HandleStatusMessage(sender, parts)
     end
 end
 
-function Comm:HandleQueryMessage(sender)
+function Comm:HandleQueryMessage(sender, channel)
     -- Respond with our status if registered
     if Addon.Database:IsRegistered() then
         local message = BuildStatusMessage()
-        self:SendToPlayer(message, sender)
+        
+        -- If we can whisper them directly, do so
+        if self:CanWhisperPlayer(sender) then
+            self:SendToPlayer(message, sender)
+        else
+            -- Check if they're a BNet friend and respond via BNet
+            local gameAccountID = self:FindBNetGameAccountForPlayer(sender)
+            if gameAccountID then
+                self:SendToBNetFriend(message, gameAccountID)
+            end
+            -- If neither whisper nor BNet works, we can't respond (cross-realm non-friend)
+        end
     end
+end
+
+-- Find the BNet game account ID for a given player name
+function Comm:FindBNetGameAccountForPlayer(playerName)
+    if not playerName then return nil end
+    
+    local num = BNGetNumFriends()
+    if not num then return nil end
+    
+    for i = 1, num do
+        local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
+        if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
+            local game = accountInfo.gameAccountInfo
+            if game.clientProgram == "WoW" and game.characterName then
+                local fullName
+                if NameUtils then
+                    fullName = NameUtils:BuildFromBNetInfo(game)
+                else
+                    local realm = game.realmName or ""
+                    if realm ~= "" then
+                        fullName = game.characterName .. "-" .. realm:gsub("%s+", "")
+                    else
+                        local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+                        fullName = game.characterName .. "-" .. playerRealm:gsub("%s+", "")
+                    end
+                end
+                
+                -- Compare names (case-insensitive)
+                if fullName and fullName:lower() == playerName:lower() then
+                    return game.gameAccountID
+                end
+            end
+        end
+    end
+    
+    return nil
 end
 
 function Comm:HandleUnregisterMessage(sender)
@@ -384,9 +511,11 @@ function Comm:HandleUnregisterMessage(sender)
 end
 
 -- =============================================================================
--- Friends List Helpers
+-- Player Data Retrieval (Unified & Deduplicated)
 -- =============================================================================
 
+-- Get online regular friends (same realm, always whisperable)
+-- Returns array of names
 function Comm:GetOnlineFriends()
     local friends = {}
     local num = C_FriendList.GetNumOnlineFriends()
@@ -398,14 +527,11 @@ function Comm:GetOnlineFriends()
             local fullName
             
             if NameUtils then
-                -- Use NameUtils for proper realm handling
                 fullName = NameUtils:BuildFromFriendInfo(info.name, info.realmName)
             else
-                -- Fallback: manual construction
                 if info.realmName and info.realmName ~= "" then
                     fullName = info.name .. "-" .. info.realmName
                 else
-                    -- No realm means same realm - append player's realm
                     local playerRealm = Addon.runtime.playerRealm or GetRealmName()
                     fullName = info.name .. "-" .. playerRealm:gsub("%s+", "")
                 end
@@ -420,6 +546,8 @@ function Comm:GetOnlineFriends()
     return friends
 end
 
+-- Get online BNet friends with their game account IDs
+-- Returns array of { name, gameAccountID }
 function Comm:GetOnlineBNFriends()
     local friends = {}
     local num = BNGetNumFriends()
@@ -429,25 +557,25 @@ function Comm:GetOnlineBNFriends()
         local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
         if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
             local game = accountInfo.gameAccountInfo
-            if game.clientProgram == "WoW" and game.characterName then
+            if game.clientProgram == "WoW" and game.characterName and game.gameAccountID then
                 local fullName
                 
                 if NameUtils then
-                    -- Use NameUtils for proper realm handling
                     fullName = NameUtils:BuildFromBNetInfo(game)
                 else
-                    -- Fallback: manual construction
                     if game.realmName and game.realmName ~= "" then
                         fullName = game.characterName .. "-" .. game.realmName:gsub("%s+", "")
                     else
-                        -- No realm means same realm
                         local playerRealm = Addon.runtime.playerRealm or GetRealmName()
                         fullName = game.characterName .. "-" .. playerRealm:gsub("%s+", "")
                     end
                 end
                 
                 if fullName then
-                    table.insert(friends, fullName)
+                    table.insert(friends, {
+                        name = fullName,
+                        gameAccountID = game.gameAccountID,
+                    })
                 end
             end
         end
@@ -456,120 +584,72 @@ function Comm:GetOnlineBNFriends()
     return friends
 end
 
--- Retrieves online characters from subscribed clubs (guilds & communities).
--- Uses modern C_Club APIs when available (GetSubscribedClubs, GetClubMembers, GetMemberInfo).
--- Presence values such as Online, OnlineMobile, Dnd and Away are treated as "online".
-function Comm:GetOnlineCommunityMembers()
-    local members = {}
-    local seen = {}
+-- Send message to a BNet friend using BNSendGameData (works cross-realm)
+function Comm:SendToBNetFriend(message, gameAccountID)
+    if not gameAccountID then return end
+    if not BNSendGameData then return end
+    
+    BNSendGameData(gameAccountID, Addon.Constants.PREFIX, message)
+end
 
-    -- Check for Club API availability
-    if not C_Club or not C_Club.GetNumClubs then
+-- Get online community members who are on same/connected realm (reachable via whisper)
+-- Excludes those already seen (to avoid duplicating with friends/bnet friends)
+-- Returns array of names
+function Comm:GetOnlineCommunityMembers(excludeSet)
+    local members = {}
+    local seen = excludeSet or {}
+
+    if not C_Club or not C_Club.GetSubscribedClubs then
         return members
     end
 
-    local clubs = {}
-
-    -- Prefer the modern subscription API when available
-    if C_Club.GetSubscribedClubs then
-        local subs = C_Club.GetSubscribedClubs() or {}
-        for _, c in ipairs(subs) do
-            table.insert(clubs, c)
-        end
-    else
-        -- Fallback: enumerate by index
-        local numClubs = C_Club.GetNumClubs()
-        for i = 1, numClubs do
-            local clubId
-            if C_Club.GetClubIdFromIndex then
-                clubId = C_Club.GetClubIdFromIndex(i)
-            end
-            if not clubId and C_Club.GetClubInfo then
-                clubId = select(1, C_Club.GetClubInfo(i))
-            end
-            if clubId then
-                table.insert(clubs, { clubId = clubId })
-            end
-        end
-    end
+    local clubs = C_Club.GetSubscribedClubs() or {}
+    local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+    local normalizedPlayerRealm = playerRealm:gsub("%s+", "")
 
     for _, club in ipairs(clubs) do
-        local clubId = club.clubId or club.id or club.clubId
-        if clubId then
-            -- Get member GUIDs (modern API)
-            local guids = {}
-            if C_Club.GetClubMembers then
-                guids = C_Club.GetClubMembers(clubId) or {}
-            else
-                -- Fallback: enumerate old-style member indices
-                local numMembers = C_Club.GetNumMembers and C_Club.GetNumMembers(clubId) or 0
-                for j = 1, numMembers do
-                    local info = C_Club.GetMemberInfo and C_Club.GetMemberInfo(clubId, j)
-                    if info and info.guid then
-                        table.insert(guids, info.guid)
-                    elseif info and (info.characterName or info.name) then
-                        -- Older data available directly — try to process it inline
-                        local charName = info.characterName or info.name
-                        local realm = info.characterRealm or (info.gameAccountInfo and info.gameAccountInfo.realmName)
-                        local isOnlineFallback = info.isOnline or info.online or (info.gameAccountInfo and info.gameAccountInfo.isOnline)
-                        if isOnlineFallback and charName and charName ~= "" then
-                            local fullName
-                            if NameUtils and NameUtils.BuildFromFriendInfo then
-                                fullName = NameUtils:BuildFromFriendInfo(charName, realm)
-                            else
-                                if realm and realm ~= "" then
-                                    fullName = charName .. "-" .. realm:gsub("%s+", "")
-                                else
-                                    fullName = charName .. "-" .. (Addon.runtime.playerRealm or GetRealmName()):gsub("%s+", "")
-                                end
-                            end
-                            if fullName and not seen[fullName] then
-                                table.insert(members, fullName)
-                                seen[fullName] = true
+        local clubId = club.clubId
+        -- Only process Character communities, not guilds (handled via GUILD channel) or BNet communities
+        -- ClubType: 0=BattleNet, 1=Character (community), 2=Guild
+        if clubId and club.clubType == Enum.ClubType.Character then
+            local memberIds = C_Club.GetClubMembers(clubId) or {}
+
+            for _, memberId in ipairs(memberIds) do
+                local info = C_Club.GetMemberInfo(clubId, memberId)
+                if info and not info.isSelf then
+                    local isOnline = info.presence and (
+                        info.presence == Enum.ClubMemberPresence.Online or
+                        info.presence == Enum.ClubMemberPresence.OnlineMobile or
+                        info.presence == Enum.ClubMemberPresence.Away or
+                        info.presence == Enum.ClubMemberPresence.Busy
+                    )
+
+                    if isOnline and info.name then
+                        -- Try to get realm from GUID
+                        local realm = nil
+                        if info.guid then
+                            local _, _, _, memberRealm = GetPlayerInfoByGUID(info.guid)
+                            if memberRealm and memberRealm ~= "" then
+                                realm = memberRealm
                             end
                         end
-                    end
-                end
-            end
 
-            -- Iterate modern GUID list
-            for _, guid in ipairs(guids) do
-                local info = C_Club.GetMemberInfo and C_Club.GetMemberInfo(clubId, guid)
-                if info then
-                    -- presence may be an Enum.ClubMemberPresence value — treat common "online" states as connected
-                    local isOnline = false
-                    if info.presence then
-                        if info.presence == Enum.ClubMemberPresence.Online or
-                           info.presence == Enum.ClubMemberPresence.OnlineMobile or
-                           info.presence == Enum.ClubMemberPresence.Dnd or
-                           info.presence == Enum.ClubMemberPresence.Away then
-                            isOnline = true
-                        end
-                    else
-                        -- Fallback fields
-                        isOnline = info.isOnline or info.online or (info.gameAccountInfo and info.gameAccountInfo.isOnline)
-                    end
-
-                    if isOnline then
-                        local charName = info.name or info.characterName or (info.gameAccountInfo and info.gameAccountInfo.characterName)
-                        local realm = info.characterRealm or (info.gameAccountInfo and info.gameAccountInfo.realmName)
-
-                        if charName and charName ~= "" then
-                            local fullName
-                            if NameUtils and NameUtils.BuildFromFriendInfo then
-                                fullName = NameUtils:BuildFromFriendInfo(charName, realm)
+                        local fullName
+                        if NameUtils then
+                            fullName = NameUtils:BuildFromFriendInfo(info.name, realm)
+                        else
+                            local normalizedRealm = realm and realm:gsub("%s+", "") or nil
+                            if normalizedRealm and normalizedRealm ~= "" then
+                                fullName = info.name .. "-" .. normalizedRealm
                             else
-                                if realm and realm ~= "" then
-                                    fullName = charName .. "-" .. realm:gsub("%s+", "")
-                                else
-                                    fullName = charName .. "-" .. (Addon.runtime.playerRealm or GetRealmName()):gsub("%s+", "")
-                                end
+                                fullName = info.name .. "-" .. normalizedPlayerRealm
                             end
+                        end
 
-                            if fullName and not seen[fullName] then
-                                table.insert(members, fullName)
-                                seen[fullName] = true
-                            end
+                        -- Only include if not already seen AND we can whisper them
+                        if fullName and not seen[fullName] and self:CanWhisperPlayer(fullName) then
+                            table.insert(members, fullName)
+                            seen[fullName] = true
                         end
                     end
                 end
@@ -580,32 +660,58 @@ function Comm:GetOnlineCommunityMembers()
     return members
 end
 
-function Comm:GetAllOnlineFriends()
-    local friends = {}
+-- MAIN UNIFIED FUNCTION: Get all reachable online players
+-- Returns array of { name = "Name-Realm", method = "WHISPER"|"BNET", gameAccountID = ... }
+-- Each player appears only ONCE with their preferred communication method
+function Comm:GetAllReachablePlayers()
+    local players = {}
     local seen = {}
-
+    
+    -- 1. BNet friends first (highest priority - can reach cross-realm)
+    for _, friendInfo in ipairs(self:GetOnlineBNFriends()) do
+        if not seen[friendInfo.name] then
+            table.insert(players, {
+                name = friendInfo.name,
+                method = "BNET",
+                gameAccountID = friendInfo.gameAccountID,
+            })
+            seen[friendInfo.name] = true
+        end
+    end
+    
+    -- 2. Regular friends (same realm, whisperable)
     for _, name in ipairs(self:GetOnlineFriends()) do
         if not seen[name] then
-            table.insert(friends, name)
+            table.insert(players, {
+                name = name,
+                method = "WHISPER",
+            })
             seen[name] = true
         end
     end
-
-    for _, name in ipairs(self:GetOnlineBNFriends()) do
+    
+    -- 3. Community members (same/connected realm only, excluding already added)
+    -- Pass seen set to avoid duplicates
+    for _, name in ipairs(self:GetOnlineCommunityMembers(seen)) do
         if not seen[name] then
-            table.insert(friends, name)
+            table.insert(players, {
+                name = name,
+                method = "WHISPER",
+            })
             seen[name] = true
         end
     end
+    
+    return players
+end
 
-    for _, name in ipairs(self:GetOnlineCommunityMembers()) do
-        if not seen[name] then
-            table.insert(friends, name)
-            seen[name] = true
-        end
+-- For backward compatibility: returns just names of all reachable players
+function Comm:GetAllOnlineFriends()
+    local names = {}
+    for _, info in ipairs(self:GetAllReachablePlayers()) do
+        table.insert(names, info.name)
     end
-
-    return friends
+    return names
 end
 
 -- =============================================================================

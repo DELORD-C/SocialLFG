@@ -33,6 +33,38 @@ handlers["CHAT_MSG_ADDON"] = function(prefix, message, channel, sender)
     Addon.Communication:HandleMessage(message, sender, channel)
 end
 
+-- Handle BNet addon messages (cross-realm communication)
+handlers["BN_CHAT_MSG_ADDON"] = function(prefix, message, _, senderID)
+    if prefix ~= Addon.Constants.PREFIX then return end
+    
+    -- Get the sender's character name from the BNet account info
+    if not senderID then return end
+    
+    local accountInfo = C_BattleNet.GetAccountInfoByID(senderID)
+    if not accountInfo or not accountInfo.gameAccountInfo then return end
+    
+    local game = accountInfo.gameAccountInfo
+    if not game.characterName then return end
+    
+    -- Build full sender name
+    local senderName
+    if Addon.NameUtils then
+        senderName = Addon.NameUtils:BuildFromBNetInfo(game)
+    else
+        local realm = game.realmName or ""
+        if realm ~= "" then
+            senderName = game.characterName .. "-" .. realm:gsub("%s+", "")
+        else
+            local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+            senderName = game.characterName .. "-" .. playerRealm:gsub("%s+", "")
+        end
+    end
+    
+    if senderName then
+        Addon.Communication:HandleMessage(message, senderName, "BNET")
+    end
+end
+
 handlers["FRIENDLIST_UPDATE"] = function()
     -- Friends list updated, trigger refresh if visible
     if Addon.runtime.initialized and SocialLFGFrame and SocialLFGFrame:IsShown() then
@@ -61,7 +93,7 @@ handlers["GUILD_ROSTER_UPDATE"] = function()
     end
 end
 
-handlers["CLUBS_LOADED"] = function()
+handlers["INITIAL_CLUBS_LOADED"] = function()
     if not Addon.runtime.initialized then return end
 
     -- Clubs list refreshed; update UI or clean up
@@ -70,6 +102,18 @@ handlers["CLUBS_LOADED"] = function()
     else
         Addon.Members:CleanupOfflinePlayers()
     end
+end
+
+handlers["CLUB_ADDED"] = function(...)
+    if not Addon.runtime.initialized then return end
+    
+    Addon.Communication:ScheduleQuery()
+end
+
+handlers["CLUB_REMOVED"] = function(...)
+    if not Addon.runtime.initialized then return end
+    
+    Addon.Communication:ScheduleQuery()
 end
 
 handlers["CLUB_MEMBER_UPDATED"] = function(...)
@@ -82,28 +126,6 @@ handlers["CLUB_MEMBER_PRESENCE_UPDATED"] = function(...)
     if not Addon.runtime.initialized then return end
 
     -- Presence changed; if UI visible, query now, otherwise perform cleanup
-    if SocialLFGFrame and SocialLFGFrame:IsShown() then
-        Addon.Communication:ScheduleQuery()
-    else
-        Addon.Members:CleanupOfflinePlayers()
-    end
-end
-
-handlers["CLUB_ADDED"] = function(...)
-    if not Addon.runtime.initialized then return end
-    Addon.Communication:ScheduleQuery()
-end
-
-handlers["CLUB_REMOVED"] = function(...)
-    if not Addon.runtime.initialized then return end
-    Addon.Communication:ScheduleQuery()
-end
-
-handlers["CLUB_ROSTER_UPDATE"] = function(...)
-    -- Community roster updated (club roster)
-    if not Addon.runtime.initialized then return end
-
-    -- If UI is visible, schedule immediate queries, otherwise trigger offline cleanup
     if SocialLFGFrame and SocialLFGFrame:IsShown() then
         Addon.Communication:ScheduleQuery()
     else
@@ -165,18 +187,18 @@ function Events:Initialize()
     -- Register all events
     eventFrame:RegisterEvent("ADDON_LOADED")
     eventFrame:RegisterEvent("CHAT_MSG_ADDON")
+    eventFrame:RegisterEvent("BN_CHAT_MSG_ADDON")  -- BNet addon messages for cross-realm
     eventFrame:RegisterEvent("FRIENDLIST_UPDATE")
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
     eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
     -- Register club events only on clients that expose the Club API
-    if C_Club and C_Club.GetNumClubs then
-        eventFrame:RegisterEvent("CLUBS_LOADED")
+    if C_Club and C_Club.GetSubscribedClubs then
+        eventFrame:RegisterEvent("INITIAL_CLUBS_LOADED")
         eventFrame:RegisterEvent("CLUB_MEMBER_UPDATED")
         eventFrame:RegisterEvent("CLUB_MEMBER_PRESENCE_UPDATED")
         eventFrame:RegisterEvent("CLUB_ADDED")
         eventFrame:RegisterEvent("CLUB_REMOVED")
-        eventFrame:RegisterEvent("CLUB_ROSTER_UPDATE")
     end
     eventFrame:RegisterEvent("GROUP_FORMED")
     eventFrame:RegisterEvent("GROUP_LEFT")
