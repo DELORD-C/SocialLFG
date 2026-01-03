@@ -133,14 +133,14 @@ $zipName = "SocialLFG-$newVersion.zip"
 $zipPath = Join-Path $releasesDir $zipName
 
 if ($DryRun) {
-    Write-Info "Dry-run: would create zip $zipPath excluding .git"
+    Write-Info "Dry-run: would create zip $zipPath excluding .git, .gitignore, release.ps1, and the releases folder"
 } else {
     $tmp = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Path $tmp | Out-Null
     try {
         Write-Info "Copying files to temporary directory..."
-        # Copy all files and directories except .git
-        Get-ChildItem -Path $ScriptRoot -Force | Where-Object { $_.Name -ne '.git' -and $_.FullName -ne $tmp } | ForEach-Object {
+        # Copy all files and directories except .git, .gitignore, release.ps1 and releases directory
+        Get-ChildItem -Path $ScriptRoot -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne '.gitignore' -and $_.Name -ne 'release.ps1' -and $_.Name -ne 'releases' -and $_.FullName -ne $tmp } | ForEach-Object {
             $dest = Join-Path $tmp $_.Name
             if ($_.PSIsContainer) {
                 Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
