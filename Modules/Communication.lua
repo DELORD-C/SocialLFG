@@ -456,6 +456,9 @@ function Comm:GetOnlineBNFriends()
     return friends
 end
 
+-- Retrieves online characters from subscribed clubs (guilds & communities).
+-- Uses modern C_Club APIs when available (GetSubscribedClubs, GetClubMembers, GetMemberInfo).
+-- Presence values such as Online, OnlineMobile, Dnd and Away are treated as "online".
 function Comm:GetOnlineCommunityMembers()
     local members = {}
     local seen = {}
@@ -465,53 +468,107 @@ function Comm:GetOnlineCommunityMembers()
         return members
     end
 
-    local numClubs = C_Club.GetNumClubs()
-    if not numClubs or numClubs == 0 then
-        return members
+    local clubs = {}
+
+    -- Prefer the modern subscription API when available
+    if C_Club.GetSubscribedClubs then
+        local subs = C_Club.GetSubscribedClubs() or {}
+        for _, c in ipairs(subs) do
+            table.insert(clubs, c)
+        end
+    else
+        -- Fallback: enumerate by index
+        local numClubs = C_Club.GetNumClubs()
+        for i = 1, numClubs do
+            local clubId
+            if C_Club.GetClubIdFromIndex then
+                clubId = C_Club.GetClubIdFromIndex(i)
+            end
+            if not clubId and C_Club.GetClubInfo then
+                clubId = select(1, C_Club.GetClubInfo(i))
+            end
+            if clubId then
+                table.insert(clubs, { clubId = clubId })
+            end
+        end
     end
 
-    for i = 1, numClubs do
-        -- Try to get a club id in a few ways depending on API availability
-        local clubId
-        if C_Club.GetClubIdFromIndex then
-            clubId = C_Club.GetClubIdFromIndex(i)
-        end
-        if not clubId and C_Club.GetClubInfo then
-            clubId = select(1, C_Club.GetClubInfo(i))
-        end
-
-        if clubId and C_Club.GetNumMembers and C_Club.GetMemberInfo then
-            local numMembers = C_Club.GetNumMembers(clubId)
-            if numMembers and numMembers > 0 then
+    for _, club in ipairs(clubs) do
+        local clubId = club.clubId or club.id or club.clubId
+        if clubId then
+            -- Get member GUIDs (modern API)
+            local guids = {}
+            if C_Club.GetClubMembers then
+                guids = C_Club.GetClubMembers(clubId) or {}
+            else
+                -- Fallback: enumerate old-style member indices
+                local numMembers = C_Club.GetNumMembers and C_Club.GetNumMembers(clubId) or 0
                 for j = 1, numMembers do
-                    local memberInfo = C_Club.GetMemberInfo(clubId, j)
-                    if memberInfo then
-                        -- Determine online state from available fields
-                        local isOnline = memberInfo.isOnline or memberInfo.online or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.isOnline)
-                        if isOnline then
-                            -- Try to extract character name and realm from different possible structures
-                            local charName = memberInfo.characterName or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.characterName)
-                            local realm = memberInfo.characterRealm or (memberInfo.gameAccountInfo and memberInfo.gameAccountInfo.realmName)
-
-                            if charName and charName ~= "" then
-                                local fullName
-                                if NameUtils and NameUtils.BuildFromFriendInfo then
-                                    -- If NameUtils provides a helper for building names from partial info
-                                    fullName = NameUtils:BuildFromFriendInfo(charName, realm)
+                    local info = C_Club.GetMemberInfo and C_Club.GetMemberInfo(clubId, j)
+                    if info and info.guid then
+                        table.insert(guids, info.guid)
+                    elseif info and (info.characterName or info.name) then
+                        -- Older data available directly — try to process it inline
+                        local charName = info.characterName or info.name
+                        local realm = info.characterRealm or (info.gameAccountInfo and info.gameAccountInfo.realmName)
+                        local isOnlineFallback = info.isOnline or info.online or (info.gameAccountInfo and info.gameAccountInfo.isOnline)
+                        if isOnlineFallback and charName and charName ~= "" then
+                            local fullName
+                            if NameUtils and NameUtils.BuildFromFriendInfo then
+                                fullName = NameUtils:BuildFromFriendInfo(charName, realm)
+                            else
+                                if realm and realm ~= "" then
+                                    fullName = charName .. "-" .. realm:gsub("%s+", "")
                                 else
-                                    -- Fallback: manual construction (assume same-realm when realm missing)
-                                    if realm and realm ~= "" then
-                                        fullName = charName .. "-" .. realm:gsub("%s+", "")
-                                    else
-                                        local playerRealm = Addon.runtime.playerRealm or GetRealmName()
-                                        fullName = charName .. "-" .. playerRealm:gsub("%s+", "")
-                                    end
+                                    fullName = charName .. "-" .. (Addon.runtime.playerRealm or GetRealmName()):gsub("%s+", "")
                                 end
+                            end
+                            if fullName and not seen[fullName] then
+                                table.insert(members, fullName)
+                                seen[fullName] = true
+                            end
+                        end
+                    end
+                end
+            end
 
-                                if fullName and not seen[fullName] then
-                                    table.insert(members, fullName)
-                                    seen[fullName] = true
+            -- Iterate modern GUID list
+            for _, guid in ipairs(guids) do
+                local info = C_Club.GetMemberInfo and C_Club.GetMemberInfo(clubId, guid)
+                if info then
+                    -- presence may be an Enum.ClubMemberPresence value — treat common "online" states as connected
+                    local isOnline = false
+                    if info.presence then
+                        if info.presence == Enum.ClubMemberPresence.Online or
+                           info.presence == Enum.ClubMemberPresence.OnlineMobile or
+                           info.presence == Enum.ClubMemberPresence.Dnd or
+                           info.presence == Enum.ClubMemberPresence.Away then
+                            isOnline = true
+                        end
+                    else
+                        -- Fallback fields
+                        isOnline = info.isOnline or info.online or (info.gameAccountInfo and info.gameAccountInfo.isOnline)
+                    end
+
+                    if isOnline then
+                        local charName = info.name or info.characterName or (info.gameAccountInfo and info.gameAccountInfo.characterName)
+                        local realm = info.characterRealm or (info.gameAccountInfo and info.gameAccountInfo.realmName)
+
+                        if charName and charName ~= "" then
+                            local fullName
+                            if NameUtils and NameUtils.BuildFromFriendInfo then
+                                fullName = NameUtils:BuildFromFriendInfo(charName, realm)
+                            else
+                                if realm and realm ~= "" then
+                                    fullName = charName .. "-" .. realm:gsub("%s+", "")
+                                else
+                                    fullName = charName .. "-" .. (Addon.runtime.playerRealm or GetRealmName()):gsub("%s+", "")
                                 end
+                            end
+
+                            if fullName and not seen[fullName] then
+                                table.insert(members, fullName)
+                                seen[fullName] = true
                             end
                         end
                     end

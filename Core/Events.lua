@@ -61,6 +61,44 @@ handlers["GUILD_ROSTER_UPDATE"] = function()
     end
 end
 
+handlers["CLUBS_LOADED"] = function()
+    if not Addon.runtime.initialized then return end
+
+    -- Clubs list refreshed; update UI or clean up
+    if SocialLFGFrame and SocialLFGFrame:IsShown() then
+        Addon.Communication:ScheduleQuery()
+    else
+        Addon.Members:CleanupOfflinePlayers()
+    end
+end
+
+handlers["CLUB_MEMBER_UPDATED"] = function(...)
+    if not Addon.runtime.initialized then return end
+    -- Member details changed; refresh our queries
+    Addon.Communication:ScheduleQuery()
+end
+
+handlers["CLUB_MEMBER_PRESENCE_UPDATED"] = function(...)
+    if not Addon.runtime.initialized then return end
+
+    -- Presence changed; if UI visible, query now, otherwise perform cleanup
+    if SocialLFGFrame and SocialLFGFrame:IsShown() then
+        Addon.Communication:ScheduleQuery()
+    else
+        Addon.Members:CleanupOfflinePlayers()
+    end
+end
+
+handlers["CLUB_ADDED"] = function(...)
+    if not Addon.runtime.initialized then return end
+    Addon.Communication:ScheduleQuery()
+end
+
+handlers["CLUB_REMOVED"] = function(...)
+    if not Addon.runtime.initialized then return end
+    Addon.Communication:ScheduleQuery()
+end
+
 handlers["CLUB_ROSTER_UPDATE"] = function(...)
     -- Community roster updated (club roster)
     if not Addon.runtime.initialized then return end
@@ -131,8 +169,13 @@ function Events:Initialize()
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
     eventFrame:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
     eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
-    -- Register club roster update only on clients that expose the Club API
+    -- Register club events only on clients that expose the Club API
     if C_Club and C_Club.GetNumClubs then
+        eventFrame:RegisterEvent("CLUBS_LOADED")
+        eventFrame:RegisterEvent("CLUB_MEMBER_UPDATED")
+        eventFrame:RegisterEvent("CLUB_MEMBER_PRESENCE_UPDATED")
+        eventFrame:RegisterEvent("CLUB_ADDED")
+        eventFrame:RegisterEvent("CLUB_REMOVED")
         eventFrame:RegisterEvent("CLUB_ROSTER_UPDATE")
     end
     eventFrame:RegisterEvent("GROUP_FORMED")
