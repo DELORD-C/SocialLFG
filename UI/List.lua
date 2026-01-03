@@ -159,6 +159,10 @@ function RowPool:CreateRow()
                     GameTooltip:AddLine(Addon:GetCategoryListLocalized(self.statusInfo.categories), 0.7, 0.7, 0.7)
                 end
             end
+            -- Show relay indicator
+            if Addon.Members:IsRelayedMember(self.playerFullName) then
+                GameTooltip:AddLine(L["TOOLTIP_RELAYED"] or "Via relay", 0.5, 0.8, 1)
+            end
             GameTooltip:Show()
         end
     end)

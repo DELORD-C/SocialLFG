@@ -55,6 +55,9 @@ local state = {
     
     -- Deduplication
     recentStatusHashes = {}, -- [playerName] = hash
+    
+    -- Relay throttling
+    lastRelayTime = {},      -- [targetName] = timestamp
 }
 
 -- =============================================================================
@@ -69,6 +72,7 @@ function Comm:Initialize()
     wipe(state.messageQueue)
     wipe(state.lastQueryTime)
     wipe(state.recentStatusHashes)
+    wipe(state.lastRelayTime)
 end
 
 -- =============================================================================
@@ -80,6 +84,12 @@ end
 --   STATUS|categories|roles|ilvl|rio|class|keystone
 --   QUERY
 --   UNREGISTER
+--   RELAY|name;cats;roles;ilvl;rio;class;key;age|name2;...
+--
+-- RELAY format (compact for 255 char limit):
+--   Each member: name;cats;roles;ilvl;rio;class;key;age
+--   Members separated by |
+--   age = seconds since last seen (compact: 0-300)
 
 local function ParseMessage(message)
     if not message then return nil end
@@ -99,6 +109,113 @@ local function BuildStatusMessage()
     
     return string.format("STATUS|%s|%s|%d|%d|%s|%s",
         categories, roles, ilvl, rio, class, keystone)
+end
+
+-- Build a relay message containing other known members
+-- targetPlayer: the player we're sending to (excluded from relay)
+-- Returns: relay message string or nil if no members to relay
+local function BuildRelayMessage(targetPlayer)
+    local eligible = Addon.Members:GetRelayEligibleMembers(targetPlayer)
+    if #eligible == 0 then
+        return nil
+    end
+    
+    local parts = {"RELAY"}
+    local maxMembers = Addon.Constants.RELAY_MAX_MEMBERS
+    local count = 0
+    
+    for _, member in ipairs(eligible) do
+        if count >= maxMembers then break end
+        
+        local s = member.status
+        local cats = s.categories and table.concat(s.categories, ",") or ""
+        local roles = s.roles and table.concat(s.roles, ",") or ""
+        local age = math.floor(member.age)
+        
+        -- Compact format: name;cats;roles;ilvl;rio;class;key;age
+        local entry = string.format("%s;%s;%s;%d;%d;%s;%s;%d",
+            member.name,
+            cats,
+            roles,
+            s.ilvl or 0,
+            s.rio or 0,
+            s.class or "",
+            s.keystone or "-",
+            age
+        )
+        
+        -- Check message length (255 char limit for addon messages)
+        local testMsg = table.concat(parts, "|") .. "|" .. entry
+        if #testMsg > 250 then
+            break
+        end
+        
+        table.insert(parts, entry)
+        count = count + 1
+    end
+    
+    if count == 0 then
+        return nil
+    end
+    
+    return table.concat(parts, "|")
+end
+
+-- Parse a relay message and process each member
+-- sender: who sent the relay (becomes sourcePlayer for relay tracking)
+local function ParseRelayMessage(parts, sender)
+    -- parts[1] = "RELAY", parts[2..n] = member entries
+    local members = {}
+    
+    for i = 2, #parts do
+        local entry = parts[i]
+        local fields = Utils:Split(entry, ";")
+        
+        if #fields >= 8 then
+            local name = fields[1]
+            local catStr = fields[2]
+            local roleStr = fields[3]
+            local ilvl = tonumber(fields[4]) or 0
+            local rio = tonumber(fields[5]) or 0
+            local class = fields[6] ~= "" and fields[6] or nil
+            local keystone = fields[7] or "-"
+            local age = tonumber(fields[8]) or 0
+            
+            -- Parse categories
+            local categories = {}
+            if catStr ~= "" then
+                for cat in catStr:gmatch("[^,]+") do
+                    table.insert(categories, cat)
+                end
+            end
+            
+            -- Parse roles
+            local roles = {}
+            if roleStr ~= "" then
+                for role in roleStr:gmatch("[^,]+") do
+                    table.insert(roles, role)
+                end
+            end
+            
+            -- Only accept if has categories (is actually LFG)
+            if #categories > 0 and name and name ~= "" then
+                table.insert(members, {
+                    name = name,
+                    status = {
+                        categories = categories,
+                        roles = roles,
+                        ilvl = ilvl,
+                        rio = rio,
+                        class = class,
+                        keystone = keystone,
+                    },
+                    age = age,
+                })
+            end
+        end
+    end
+    
+    return members
 end
 
 -- =============================================================================
@@ -389,6 +506,8 @@ function Comm:HandleMessage(message, sender, channel)
         self:HandleQueryMessage(sender, channel)
     elseif command == "UNREGISTER" then
         self:HandleUnregisterMessage(sender)
+    elseif command == "RELAY" then
+        self:HandleRelayMessage(sender, parts)
     end
 end
 
@@ -439,29 +558,58 @@ function Comm:HandleStatusMessage(sender, parts)
     -- Store new hash
     state.recentStatusHashes[sender] = newHash
     
-    -- Update member list
+    -- Update member list (direct source)
     if #categories > 0 then
-        Addon.Members:UpdateMember(sender, status)
+        Addon.Members:UpdateMember(sender, status, "direct", nil)
     else
         Addon.Members:RemoveMember(sender)
     end
 end
 
 function Comm:HandleQueryMessage(sender, channel)
-    -- Respond with our status if registered
-    if Addon.Database:IsRegistered() then
-        local message = BuildStatusMessage()
+    if not Addon.Database:IsRegistered() then return end
+    
+    local statusMessage = BuildStatusMessage()
+    local relayMessage = BuildRelayMessage(sender)
+    
+    -- Determine how to respond
+    local canWhisper = self:CanWhisperPlayer(sender)
+    local gameAccountID = not canWhisper and self:FindBNetGameAccountForPlayer(sender) or nil
+    
+    -- Send our status
+    if canWhisper then
+        self:SendToPlayer(statusMessage, sender)
+    elseif gameAccountID then
+        self:SendToBNetFriend(statusMessage, gameAccountID)
+    end
+    
+    -- Send relay data (with throttle)
+    if relayMessage then
+        local now = GetTime()
+        local lastRelay = state.lastRelayTime[sender] or 0
         
-        -- If we can whisper them directly, do so
-        if self:CanWhisperPlayer(sender) then
-            self:SendToPlayer(message, sender)
-        else
-            -- Check if they're a BNet friend and respond via BNet
-            local gameAccountID = self:FindBNetGameAccountForPlayer(sender)
-            if gameAccountID then
-                self:SendToBNetFriend(message, gameAccountID)
+        if now - lastRelay >= Addon.Constants.RELAY_COOLDOWN then
+            if canWhisper then
+                self:SendToPlayer(relayMessage, sender)
+            elseif gameAccountID then
+                self:SendToBNetFriend(relayMessage, gameAccountID)
             end
-            -- If neither whisper nor BNet works, we can't respond (cross-realm non-friend)
+            state.lastRelayTime[sender] = now
+        end
+    end
+end
+
+-- Handle incoming relay data from another player
+function Comm:HandleRelayMessage(sender, parts)
+    local members = ParseRelayMessage(parts, sender)
+    
+    for _, member in ipairs(members) do
+        -- Don't add ourselves from relay
+        local isSelf = NameUtils and NameUtils:IsSamePlayer(member.name, Addon.runtime.playerFullName)
+                       or member.name == Addon.runtime.playerFullName
+        if not isSelf then
+            -- Add with relay source
+            Addon.Members:UpdateMember(member.name, member.status, "relay", sender)
         end
     end
 end
@@ -721,4 +869,5 @@ end
 function Comm:ClearPlayerData(playerName)
     state.lastQueryTime[playerName] = nil
     state.recentStatusHashes[playerName] = nil
+    state.lastRelayTime[playerName] = nil
 end

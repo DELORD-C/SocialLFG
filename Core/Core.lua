@@ -19,7 +19,7 @@ local L = _G.SocialLFG_L
 Addon.Constants = {
     -- Addon Messaging
     PREFIX = "SocialLFG",
-    PROTOCOL_VERSION = 2,
+    PROTOCOL_VERSION = 3,
     
     -- Timing (in seconds)
     TIMEOUT = 90,                    -- Player timeout threshold
@@ -30,6 +30,11 @@ Addon.Constants = {
     MESSAGE_RATE_LIMIT = 0.1,        -- Min time between addon messages
     RIO_RETRY_DELAY = 2,             -- Delay for RaiderIO retry
     RIO_MAX_RETRIES = 3,             -- Max RaiderIO initialization retries
+    
+    -- Relay System
+    RELAY_MAX_AGE = 300,             -- Only relay members seen in last 5 minutes
+    RELAY_MAX_MEMBERS = 5,           -- Max members per relay message (255 char limit)
+    RELAY_COOLDOWN = 30,             -- Min seconds between relay sends to same target
     
     -- UI Dimensions
     ROW_HEIGHT = 24,

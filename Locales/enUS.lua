@@ -55,6 +55,7 @@ SocialLFG_RegisterLocale("enUS", {
     ["TOOLTIP_SELECT_HINT2"] = "to register for LFG",
     ["TOOLTIP_LEFT_CLICK"] = "Left-click: Open/Close window",
     ["TOOLTIP_RIGHT_CLICK"] = "Right-click: Toggle registration",
+    ["TOOLTIP_RELAYED"] = "Via friend relay",
     
     -- Errors and Warnings
     ["ERR_SELECT_CATEGORY"] = "Please select at least one category",

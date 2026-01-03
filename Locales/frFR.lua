@@ -55,6 +55,7 @@ SocialLFG_RegisterLocale("frFR", {
     ["TOOLTIP_SELECT_HINT2"] = "pour vous inscrire au LFG",
     ["TOOLTIP_LEFT_CLICK"] = "Clic gauche : Ouvrir/Fermer la fenêtre",
     ["TOOLTIP_RIGHT_CLICK"] = "Clic droit : Basculer l'inscription",
+    ["TOOLTIP_RELAYED"] = "Via relais d'ami",
     
     -- Errors and Warnings
     ["ERR_SELECT_CATEGORY"] = "Veuillez sélectionner au moins une catégorie",

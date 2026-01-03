@@ -1,6 +1,13 @@
 --[[
     SocialLFG - Members Module
-    LFG members list management with differential updates
+    LFG members list management with differential updates and relay support
+    
+    MEMBER SOURCES:
+    - "direct": Player communicated with us directly (whisper, guild, bnet)
+    - "relay": We learned about this player through another player's relay
+    
+    Direct sources are preferred over relay sources. When we receive a relay
+    about a player we already know directly, we ignore the relay.
 ]]
 
 local Addon = _G.SocialLFG
@@ -18,7 +25,9 @@ local Members = Addon.Members
 -- =============================================================================
 
 local state = {
-    -- Member data: [playerFullName] = { status, lastSeen }
+    -- Member data: [playerFullName] = { status, lastSeen, source, sourcePlayer }
+    -- source: "direct" | "relay"
+    -- sourcePlayer: who told us about this member (for relay)
     members = {},
     
     -- Sorted list cache (invalidated on change)
@@ -50,10 +59,15 @@ end
 -- Member Management
 -- =============================================================================
 
-function Members:UpdateMember(playerName, status)
+-- Update or add a member
+-- source: "direct" (default) or "relay"
+-- sourcePlayer: who told us about this member (required for relay)
+function Members:UpdateMember(playerName, status, source, sourcePlayer)
     if not playerName then
         return
     end
+    
+    source = source or "direct"
     
     -- Validate and normalize player name
     local isValid = NameUtils and NameUtils:IsValidName(playerName) or Utils:IsValidPlayerName(playerName)
@@ -76,15 +90,26 @@ function Members:UpdateMember(playerName, status)
     local now = GetTime()
     local existing = state.members[playerName]
     
-    -- Check if this is actually a change
+    -- Handle source priority: direct > relay
     if existing then
-        local oldHash = Utils:HashStatus(existing.status)
-        local newHash = Utils:HashStatus(status)
-        
-        if oldHash == newHash then
-            -- Just refresh timestamp
-            existing.lastSeen = now
+        -- If we have direct info, ignore relay updates
+        if existing.source == "direct" and source == "relay" then
             return
+        end
+        
+        -- If upgrading from relay to direct, always update
+        if existing.source == "relay" and source == "direct" then
+            -- Fall through to update
+        else
+            -- Same source type - check if status actually changed
+            local oldHash = Utils:HashStatus(existing.status)
+            local newHash = Utils:HashStatus(status)
+            
+            if oldHash == newHash then
+                -- Just refresh timestamp
+                existing.lastSeen = now
+                return
+            end
         end
     end
     
@@ -92,6 +117,8 @@ function Members:UpdateMember(playerName, status)
     state.members[playerName] = {
         status = status,
         lastSeen = now,
+        source = source,
+        sourcePlayer = sourcePlayer,
     }
     
     -- Mark change
@@ -131,6 +158,47 @@ function Members:RefreshTimestamp(playerName)
     end
 end
 
+-- Get members eligible for relay (direct sources only, seen recently)
+-- excludePlayer: don't include this player (the one we're relaying to)
+-- Returns: array of { name, status, age } sorted by age (freshest first)
+function Members:GetRelayEligibleMembers(excludePlayer)
+    local eligible = {}
+    local now = GetTime()
+    local maxAge = Addon.Constants.RELAY_MAX_AGE
+    local localPlayer = Addon.runtime.playerFullName
+    
+    for playerName, data in pairs(state.members) do
+        -- Only relay direct sources (not relayed data - prevents loops)
+        if data.source == "direct" then
+            local age = now - data.lastSeen
+            
+            -- Skip: self, the target, and stale data
+            if playerName ~= localPlayer and 
+               playerName ~= excludePlayer and 
+               age <= maxAge then
+                table.insert(eligible, {
+                    name = playerName,
+                    status = data.status,
+                    age = age,
+                })
+            end
+        end
+    end
+    
+    -- Sort by freshness (newest first)
+    table.sort(eligible, function(a, b)
+        return a.age < b.age
+    end)
+    
+    return eligible
+end
+
+-- Check if a member was from relay source
+function Members:IsRelayedMember(playerName)
+    local member = state.members[playerName]
+    return member and member.source == "relay"
+end
+
 -- =============================================================================
 -- Local Player Management
 -- =============================================================================
@@ -146,6 +214,8 @@ function Members:AddLocalPlayer()
     state.members[playerName] = {
         status = status,
         lastSeen = GetTime(),
+        source = "direct",
+        sourcePlayer = nil,
     }
     
     self:MarkChanged(playerName, "update")
