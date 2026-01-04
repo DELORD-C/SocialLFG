@@ -133,40 +133,51 @@ handlers["CLUB_MEMBER_PRESENCE_UPDATED"] = function(...)
     end
 end
 
-handlers["GROUP_FORMED"] = function()
+-- Track previous group state to detect join/leave
+-- Initialize to current state to prevent false triggers on first event
+local wasInGroup = IsInGroup() or false
+
+handlers["GROUP_ROSTER_UPDATE"] = function()
     if not Addon.runtime.initialized then return end
+    
+    local inGroup = IsInGroup()
     
     -- Player joined a group
-    if Addon:IsRegistered() then
-        -- Save that we were registered before joining group
-        Addon.Database:SetWasRegisteredBeforeGroup(true)
-        
-        -- Unregister (can't be LFG while in group)
-        Addon:Unregister()
-    end
-    
-    Addon:UpdateState()
-    Addon:FireCallback("OnGroupStatusChanged")
-end
-
-handlers["GROUP_LEFT"] = function()
-    if not Addon.runtime.initialized then return end
-    
-    -- Player left group
-    if Addon.Database:WasRegisteredBeforeGroup() then
-        -- Re-register with previous preferences
-        local categories = Addon.Database:GetSavedCategories()
-        local roles = Addon.Database:GetSavedRoles()
-        
-        if #categories > 0 and #roles > 0 then
-            Addon:Register(categories, roles)
+    if inGroup and not wasInGroup then
+        if Addon:IsRegistered() then
+            -- Save that we were registered before joining group
+            Addon.Database:SetWasRegisteredBeforeGroup(true)
+            
+            -- Unregister (can't be LFG while in group)
+            Addon:Unregister()
         end
         
+        Addon:UpdateState()
+        Addon:FireCallback("OnGroupStatusChanged")
+    -- Player left group
+    elseif not inGroup and wasInGroup then
+        -- IMPORTANT: Update state BEFORE trying to re-register
+        -- This ensures CanRegister() returns true (state becomes IDLE)
+        Addon:UpdateState()
+        
+        -- Check if auto-re-register is enabled and we were registered before
+        if Addon.Database:IsAutoReregisterEnabled() and Addon.Database:WasRegisteredBeforeGroup() then
+            -- Re-register with previous preferences
+            local categories = Addon.Database:GetSavedCategories()
+            local roles = Addon.Database:GetSavedRoles()
+            
+            if #categories > 0 and #roles > 0 then
+                Addon:Register(categories, roles)
+            end
+        end
+        
+        -- Always clear the flag after leaving group
         Addon.Database:SetWasRegisteredBeforeGroup(false)
+        
+        Addon:FireCallback("OnGroupStatusChanged")
     end
     
-    Addon:UpdateState()
-    Addon:FireCallback("OnGroupStatusChanged")
+    wasInGroup = inGroup
 end
 
 handlers["BAG_UPDATE_DELAYED"] = function()
@@ -200,10 +211,9 @@ function Events:Initialize()
         eventFrame:RegisterEvent("CLUB_ADDED")
         eventFrame:RegisterEvent("CLUB_REMOVED")
     end
-    eventFrame:RegisterEvent("GROUP_FORMED")
-    eventFrame:RegisterEvent("GROUP_LEFT")
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     eventFrame:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE")
+    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     
     -- Set up event dispatcher
     eventFrame:SetScript("OnEvent", function(_, event, ...)

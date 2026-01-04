@@ -61,6 +61,7 @@ SocialLFG_RegisterLocale("enUS", {
     ["ERR_SELECT_CATEGORY"] = "Please select at least one category",
     ["ERR_SELECT_ROLE"] = "Please select at least one role",
     ["ERR_CANNOT_REGISTER"] = "Cannot register: %s",
+    ["ERR_IN_GROUP"] = "you are in a group",
     ["ERR_INVALID_PLAYER"] = "Invalid player name",
     ["ERR_INVITE_FAILED"] = "Failed to invite player",
     
@@ -83,6 +84,9 @@ SocialLFG_RegisterLocale("enUS", {
     ["DUNGEON_STR"] = "STR",
     ["DUNGEON_DB"] = "DB",
     ["DUNGEON_UNKNOWN"] = "UNK",
+    
+    -- Settings
+    ["LABEL_AUTO_REREGISTER"] = "Register again after leaving a group",
     
     -- Misc
     ["NO_KEYSTONE"] = "-",

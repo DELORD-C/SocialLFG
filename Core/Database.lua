@@ -43,11 +43,14 @@ function DB:GetDefaultDB()
         -- State preservation
         wasRegisteredBeforeGroup = false,
         
+        -- Settings
+        autoReregisterOnGroupLeave = true, -- Auto re-register after leaving a group
+        
         -- UI state
         rioNoticeDismissed = false,
         
         -- Version for future migrations
-        dbVersion = 2,
+        dbVersion = 3,
     }
 end
 
@@ -82,6 +85,11 @@ function DB:MigrateDB()
         db.dbVersion = 2
     end
     
+    -- Migrate to version 3 (add autoReregisterOnGroupLeave)
+    if db.dbVersion and db.dbVersion < 3 then
+        db.dbVersion = 3
+    end
+    
     -- Ensure all required fields exist
     if not db.registration then
         db.registration = { categories = {}, roles = {} }
@@ -94,6 +102,9 @@ function DB:MigrateDB()
     end
     if db.rioNoticeDismissed == nil then
         db.rioNoticeDismissed = false
+    end
+    if db.autoReregisterOnGroupLeave == nil then
+        db.autoReregisterOnGroupLeave = true -- Default to enabled for backwards compatibility
     end
 end
 
@@ -190,4 +201,21 @@ end
 function DB:DismissRioNotice()
     self.db = self.db or SocialLFGDB or self:GetDefaultDB()
     self.db.rioNoticeDismissed = true
+end
+-- =============================================================================
+-- Settings
+-- =============================================================================
+
+function DB:IsAutoReregisterEnabled()
+    local db = self.db or SocialLFGDB
+    -- Default to true if not set (backwards compatibility)
+    if db and db.autoReregisterOnGroupLeave ~= nil then
+        return db.autoReregisterOnGroupLeave
+    end
+    return true
+end
+
+function DB:SetAutoReregisterEnabled(value)
+    self.db = self.db or SocialLFGDB or self:GetDefaultDB()
+    self.db.autoReregisterOnGroupLeave = value
 end

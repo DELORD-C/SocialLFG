@@ -62,6 +62,11 @@ function UI:SetupMainFrame()
     if SocialLFGHealCheck then SocialLFGHealCheck:SetText(L["ROLE_HEAL"] or SocialLFGHealCheck:GetText()) end
     if SocialLFGDPSCheck then SocialLFGDPSCheck:SetText(L["ROLE_DPS"] or SocialLFGDPSCheck:GetText()) end
 
+    -- Settings checkbox
+    if SocialLFGAutoReregisterCheck then 
+        SocialLFGAutoReregisterCheck:SetText(L["LABEL_AUTO_REREGISTER"] or SocialLFGAutoReregisterCheck:GetText()) 
+    end
+
     -- Controls
     if SocialLFGKeyLevelLabel then SocialLFGKeyLevelLabel:SetText(L["LABEL_KEY_LEVEL"] or SocialLFGKeyLevelLabel:GetText()) end
     if SocialLFGRegisterButton then SocialLFGRegisterButton:SetText(L["BTN_REGISTER"] or SocialLFGRegisterButton:GetText()) end
@@ -87,11 +92,14 @@ function UI:OnShow()
         Addon.Members:AddLocalPlayer()
     end
     
+    -- Request friend list update from server
+    -- This ensures we have the latest friend data before querying
+    C_FriendList.ShowFriends()
+    
     -- Query all players (with throttling)
-    if not Addon.runtime.hasInitialQuery then
-        Addon.Communication:QueryAllPlayers()
-        Addon.runtime.hasInitialQuery = true
-    end
+    -- Note: Always query on show, the throttle will prevent spam
+    Addon.Communication:ScheduleQuery()
+    Addon.runtime.hasInitialQuery = true
     
     -- Update list
     self:UpdateList()
@@ -245,6 +253,11 @@ function UI:RestoreCheckboxStates()
     if SocialLFGDPSCheck and SocialLFGDPSCheck:IsVisible() then
         SocialLFGDPSCheck:SetChecked(tContains(roles, "DPS"))
     end
+    
+    -- Set settings checkbox
+    if SocialLFGAutoReregisterCheck then
+        SocialLFGAutoReregisterCheck:SetChecked(db:IsAutoReregisterEnabled())
+    end
 end
 
 -- =============================================================================
@@ -317,6 +330,15 @@ function UI:OnCheckboxClick()
     
     -- Always update button state
     self:UpdateButtonState()
+end
+
+-- =============================================================================
+-- Auto-Reregister Checkbox Click Handler
+-- =============================================================================
+
+function UI:OnAutoReregisterClick()
+    local isChecked = SocialLFGAutoReregisterCheck and SocialLFGAutoReregisterCheck:GetChecked()
+    Addon.Database:SetAutoReregisterEnabled(isChecked)
 end
 
 -- =============================================================================

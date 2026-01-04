@@ -278,7 +278,8 @@ end
 
 function Addon:Register(categories, roles)
     if not self:CanRegister() then
-        self:LogWarn(L["ERR_CANNOT_REGISTER"]) 
+        local reason = L["ERR_IN_GROUP"] or "in a group"
+        self:LogWarn(string.format(L["ERR_CANNOT_REGISTER"], reason))
         return false
     end
 
@@ -376,9 +377,13 @@ local function FormatLog(level, msg)
     print(string.format("%s %s[%s]|r %s", prefix, color, level, msg))
 end
 
+-- Debug mode can be enabled with /slfg debug
+Addon.debugMode = false
+
 function Addon:LogDebug(msg)
-    -- Disabled by default, enable for development
-    -- FormatLog("DEBUG", msg)
+    if self.debugMode then
+        FormatLog("DEBUG", msg)
+    end
 end
 
 function Addon:LogInfo(msg)
@@ -400,6 +405,35 @@ end
 SLASH_SOCIALLFG1 = "/slfg"
 SLASH_SOCIALLFG2 = "/sociallfg"
 SlashCmdList["SOCIALLFG"] = function(msg)
+    msg = msg and msg:lower() or ""
+    
+    if msg == "debug" then
+        Addon.debugMode = not Addon.debugMode
+        if Addon.debugMode then
+            Addon:LogInfo("Debug mode ENABLED")
+        else
+            Addon:LogInfo("Debug mode DISABLED")
+        end
+        return
+    elseif msg == "status" then
+        -- Print diagnostic information
+        Addon:PrintDiagnostics()
+        return
+    elseif msg == "query" then
+        -- Force query all players
+        Addon.Communication:QueryAllPlayers()
+        Addon:LogInfo("Sent query to all friends and guild")
+        return
+    elseif msg == "help" then
+        print("|cFF4DA6FFSocialLFG|r Commands:")
+        print("  /slfg - Toggle window")
+        print("  /slfg debug - Toggle debug mode")
+        print("  /slfg status - Show diagnostics")
+        print("  /slfg query - Force query all players")
+        return
+    end
+    
+    -- Default: toggle window
     if SocialLFGFrame then
         if SocialLFGFrame:IsShown() then
             SocialLFGFrame:Hide()
@@ -407,4 +441,36 @@ SlashCmdList["SOCIALLFG"] = function(msg)
             SocialLFGFrame:Show()
         end
     end
+end
+
+-- Diagnostic function to help troubleshoot issues
+function Addon:PrintDiagnostics()
+    print("|cFF4DA6FFSocialLFG|r Diagnostics:")
+    print("  Initialized: " .. tostring(self.runtime.initialized))
+    print("  State: " .. tostring(self.currentState))
+    print("  Registered: " .. tostring(self.Database:IsRegistered()))
+    print("  Player: " .. tostring(self.runtime.playerFullName))
+    
+    -- Count members
+    local memberCount = self.Members:GetMemberCount()
+    print("  Members in list: " .. memberCount)
+    
+    -- Count reachable players
+    local reachable = self.Communication:GetAllReachablePlayers()
+    local bnetCount, whisperCount = 0, 0
+    for _, info in ipairs(reachable) do
+        if info.method == "BNET" then
+            bnetCount = bnetCount + 1
+        else
+            whisperCount = whisperCount + 1
+        end
+    end
+    print("  Reachable BNet friends: " .. bnetCount)
+    print("  Reachable whisper targets: " .. whisperCount)
+    
+    -- Guild status
+    print("  In Guild: " .. tostring(IsInGuild()))
+    
+    -- Debug mode
+    print("  Debug mode: " .. tostring(self.debugMode))
 end

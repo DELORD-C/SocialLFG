@@ -81,8 +81,8 @@ end
 
 -- Message format: COMMAND|arg1|arg2|...
 -- Commands:
---   STATUS|categories|roles|ilvl|rio|class|keystone
---   QUERY
+--   STATUS|version|categories|roles|ilvl|rio|class|keystone
+--   QUERY|version
 --   UNREGISTER
 --   RELAY|name;cats;roles;ilvl;rio;class;key;age|name2;...
 --
@@ -90,6 +90,8 @@ end
 --   Each member: name;cats;roles;ilvl;rio;class;key;age
 --   Members separated by |
 --   age = seconds since last seen (compact: 0-300)
+--
+-- Protocol version 3: Added version field to STATUS and QUERY messages
 
 local function ParseMessage(message)
     if not message then return nil end
@@ -106,9 +108,10 @@ local function BuildStatusMessage()
     local rio = player:GetRioScore()
     local class = Addon.runtime.playerClass or ""
     local keystone = player:FormatKeystone()
+    local version = Addon.Constants.PROTOCOL_VERSION
     
-    return string.format("STATUS|%s|%s|%d|%d|%s|%s",
-        categories, roles, ilvl, rio, class, keystone)
+    return string.format("STATUS|%d|%s|%s|%d|%d|%s|%s",
+        version, categories, roles, ilvl, rio, class, keystone)
 end
 
 -- Build a relay message containing other known members
@@ -417,12 +420,18 @@ function Comm:ScheduleQuery()
     end)
 end
 
+-- Build query message with protocol version
+local function BuildQueryMessage()
+    return string.format("QUERY|%d", Addon.Constants.PROTOCOL_VERSION)
+end
+
 function Comm:QueryAllPlayers()
     local now = GetTime()
+    local queryMsg = BuildQueryMessage()
     
     -- Query guild (with throttle)
     if now - state.lastGuildQueryTime >= Addon.Constants.QUERY_THROTTLE then
-        self:SendToGuild("QUERY")
+        self:SendToGuild(queryMsg)
         state.lastGuildQueryTime = now
     end
     
@@ -437,13 +446,14 @@ function Comm:QueryPlayerByInfo(playerInfo)
     
     local now = GetTime()
     local lastQuery = state.lastQueryTime[playerInfo.name] or 0
+    local queryMsg = BuildQueryMessage()
     
     -- Only query if enough time has passed
     if now - lastQuery >= Addon.Constants.QUERY_THROTTLE then
         if playerInfo.method == "BNET" and playerInfo.gameAccountID then
-            self:SendToBNetFriend("QUERY", playerInfo.gameAccountID)
+            self:SendToBNetFriend(queryMsg, playerInfo.gameAccountID)
         elseif playerInfo.method == "WHISPER" then
-            self:SendToPlayer("QUERY", playerInfo.name)
+            self:SendToPlayer(queryMsg, playerInfo.name)
         end
         state.lastQueryTime[playerInfo.name] = now
     end
@@ -468,7 +478,8 @@ function Comm:QueryPlayer(target)
     
     -- Only query if enough time has passed
     if now - lastQuery >= Addon.Constants.QUERY_THROTTLE then
-        self:SendToPlayer("QUERY", normalizedTarget)
+        local queryMsg = BuildQueryMessage()
+        self:SendToPlayer(queryMsg, normalizedTarget)
         state.lastQueryTime[normalizedTarget] = now
     end
 end
@@ -480,9 +491,14 @@ end
 function Comm:HandleMessage(message, sender, channel)
     if not message or not sender then return end
     
+    Addon:LogDebug("Received message from " .. sender .. " via " .. tostring(channel) .. ": " .. message:sub(1, 50))
+    
     -- Validate and normalize sender
     local isValid = NameUtils and NameUtils:IsValidName(sender) or Utils:IsValidPlayerName(sender)
-    if not isValid then return end
+    if not isValid then 
+        Addon:LogDebug("Invalid sender name: " .. sender)
+        return 
+    end
     
     -- Normalize sender name for consistent storage
     if NameUtils then
@@ -492,13 +508,17 @@ function Comm:HandleMessage(message, sender, channel)
     -- Don't process own messages (compare canonical names)
     local isSelf = NameUtils and NameUtils:IsSamePlayer(sender, Addon.runtime.playerFullName)
                    or sender == Addon.runtime.playerFullName
-    if isSelf then return end
+    if isSelf then 
+        Addon:LogDebug("Ignoring own message")
+        return 
+    end
     
     -- Parse message
     local parts = ParseMessage(message)
     if not parts or #parts == 0 then return end
     
     local command = parts[1]
+    Addon:LogDebug("Processing command: " .. command .. " from " .. sender)
     
     if command == "STATUS" then
         self:HandleStatusMessage(sender, parts)
@@ -512,13 +532,33 @@ function Comm:HandleMessage(message, sender, channel)
 end
 
 function Comm:HandleStatusMessage(sender, parts)
-    -- Parse status data
-    local categoryStr = parts[2] or ""
-    local roleStr = parts[3] or ""
-    local ilvl = tonumber(parts[4]) or 0
-    local rio = tonumber(parts[5]) or 0
-    local class = parts[6] ~= "" and parts[6] or nil
-    local keystone = parts[7] or "-"
+    -- Protocol v3: STATUS|version|categories|roles|ilvl|rio|class|keystone
+    -- Legacy v2: STATUS|categories|roles|ilvl|rio|class|keystone
+    
+    local version, categoryStr, roleStr, ilvl, rio, class, keystone
+    
+    -- Detect protocol version by checking if second field is a number (version)
+    local potentialVersion = tonumber(parts[2])
+    
+    if potentialVersion and potentialVersion >= 1 and potentialVersion <= 100 then
+        -- Protocol v3+ format with version field
+        version = potentialVersion
+        categoryStr = parts[3] or ""
+        roleStr = parts[4] or ""
+        ilvl = tonumber(parts[5]) or 0
+        rio = tonumber(parts[6]) or 0
+        class = parts[7] ~= "" and parts[7] or nil
+        keystone = parts[8] or "-"
+    else
+        -- Legacy format without version field (v2 or older)
+        version = 2
+        categoryStr = parts[2] or ""
+        roleStr = parts[3] or ""
+        ilvl = tonumber(parts[4]) or 0
+        rio = tonumber(parts[5]) or 0
+        class = parts[6] ~= "" and parts[6] or nil
+        keystone = parts[7] or "-"
+    end
     
     -- Parse categories and roles
     local categories = {}
@@ -543,6 +583,7 @@ function Comm:HandleStatusMessage(sender, parts)
         rio = rio,
         class = class,
         keystone = keystone,
+        protocolVersion = version,
     }
     
     -- Deduplication: check if status actually changed
@@ -554,7 +595,6 @@ function Comm:HandleStatusMessage(sender, parts)
         Addon.Members:RefreshTimestamp(sender)
         return
     end
-    
     -- Store new hash
     state.recentStatusHashes[sender] = newHash
     
@@ -615,33 +655,51 @@ function Comm:HandleRelayMessage(sender, parts)
 end
 
 -- Find the BNet game account ID for a given player name
+-- Uses proper iteration through game accounts
 function Comm:FindBNetGameAccountForPlayer(playerName)
     if not playerName then return nil end
     
-    local num = BNGetNumFriends()
-    if not num then return nil end
+    local numBNetTotal = BNGetNumFriends()
+    if not numBNetTotal or numBNetTotal == 0 then return nil end
     
-    for i = 1, num do
-        local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-        if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
-            local game = accountInfo.gameAccountInfo
-            if game.clientProgram == "WoW" and game.characterName then
-                local fullName
-                if NameUtils then
-                    fullName = NameUtils:BuildFromBNetInfo(game)
-                else
-                    local realm = game.realmName or ""
-                    if realm ~= "" then
-                        fullName = game.characterName .. "-" .. realm:gsub("%s+", "")
-                    else
-                        local playerRealm = Addon.runtime.playerRealm or GetRealmName()
-                        fullName = game.characterName .. "-" .. playerRealm:gsub("%s+", "")
-                    end
-                end
+    -- Normalize the target name for comparison
+    local targetCanonical = NameUtils and NameUtils:ToCanonical(playerName) or playerName
+    if not targetCanonical then return nil end
+    targetCanonical = targetCanonical:lower()
+    
+    for friendIndex = 1, numBNetTotal do
+        local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(friendIndex)
+        
+        if numGameAccounts and numGameAccounts > 0 then
+            for gameIndex = 1, numGameAccounts do
+                local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(friendIndex, gameIndex)
                 
-                -- Compare names (case-insensitive)
-                if fullName and fullName:lower() == playerName:lower() then
-                    return game.gameAccountID
+                if gameAccountInfo and gameAccountInfo.clientProgram == "WoW" then
+                    local charName = gameAccountInfo.characterName
+                    local gameAccountID = gameAccountInfo.gameAccountID
+                    
+                    if charName and gameAccountID then
+                        local fullName
+                        if NameUtils then
+                            fullName = NameUtils:BuildFromBNetInfo(gameAccountInfo)
+                        else
+                            local realm = gameAccountInfo.realmName or ""
+                            if realm ~= "" then
+                                fullName = charName .. "-" .. realm:gsub("%s+", "")
+                            else
+                                local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+                                fullName = charName .. "-" .. playerRealm:gsub("%s+", "")
+                            end
+                        end
+                        
+                        -- Compare canonical names (case-insensitive)
+                        if fullName then
+                            local fullNameCanonical = NameUtils and NameUtils:ToCanonical(fullName) or fullName
+                            if fullNameCanonical and fullNameCanonical:lower() == targetCanonical then
+                                return gameAccountID
+                            end
+                        end
+                    end
                 end
             end
         end
@@ -695,35 +753,54 @@ function Comm:GetOnlineFriends()
 end
 
 -- Get online BNet friends with their game account IDs
--- Returns array of { name, gameAccountID }
+-- Returns array of { name, gameAccountID, bnetAccountID }
+-- Uses the modern C_BattleNet API correctly by iterating game accounts
 function Comm:GetOnlineBNFriends()
     local friends = {}
-    local num = BNGetNumFriends()
-    if not num then return friends end
+    local numBNetTotal, numBNetOnline = BNGetNumFriends()
+    if not numBNetTotal or numBNetTotal == 0 then return friends end
     
-    for i = 1, num do
-        local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-        if accountInfo and accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline then
-            local game = accountInfo.gameAccountInfo
-            if game.clientProgram == "WoW" and game.characterName and game.gameAccountID then
-                local fullName
-                
-                if NameUtils then
-                    fullName = NameUtils:BuildFromBNetInfo(game)
-                else
-                    if game.realmName and game.realmName ~= "" then
-                        fullName = game.characterName .. "-" .. game.realmName:gsub("%s+", "")
-                    else
-                        local playerRealm = Addon.runtime.playerRealm or GetRealmName()
-                        fullName = game.characterName .. "-" .. playerRealm:gsub("%s+", "")
+    -- Iterate through all BNet friends (online ones have game accounts)
+    for friendIndex = 1, numBNetTotal do
+        local accountInfo = C_BattleNet.GetFriendAccountInfo(friendIndex)
+        if accountInfo then
+            local bnetAccountID = accountInfo.bnetAccountID
+            
+            -- Each BNet friend can have multiple game accounts (WoW, D4, etc.)
+            local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(friendIndex)
+            
+            if numGameAccounts and numGameAccounts > 0 then
+                for gameIndex = 1, numGameAccounts do
+                    local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(friendIndex, gameIndex)
+                    
+                    if gameAccountInfo and gameAccountInfo.clientProgram == "WoW" then
+                        local charName = gameAccountInfo.characterName
+                        local realmName = gameAccountInfo.realmName
+                        local gameAccountID = gameAccountInfo.gameAccountID
+                        
+                        if charName and charName ~= "" and gameAccountID then
+                            local fullName
+                            
+                            if NameUtils then
+                                fullName = NameUtils:BuildFromBNetInfo(gameAccountInfo)
+                            else
+                                if realmName and realmName ~= "" then
+                                    fullName = charName .. "-" .. realmName:gsub("%s+", "")
+                                else
+                                    local playerRealm = Addon.runtime.playerRealm or GetRealmName()
+                                    fullName = charName .. "-" .. playerRealm:gsub("%s+", "")
+                                end
+                            end
+                            
+                            if fullName then
+                                table.insert(friends, {
+                                    name = fullName,
+                                    gameAccountID = gameAccountID,
+                                    bnetAccountID = bnetAccountID,
+                                })
+                            end
+                        end
                     end
-                end
-                
-                if fullName then
-                    table.insert(friends, {
-                        name = fullName,
-                        gameAccountID = game.gameAccountID,
-                    })
                 end
             end
         end

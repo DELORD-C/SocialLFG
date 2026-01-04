@@ -60,37 +60,37 @@
             
             <!-- Section: Members List -->
             <FontString name="SocialLFGMembersLabel" inherits="GameFontNormal" text="LFG Members:">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-175"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-195"/></Anchors>
                 <Color r="1" g="0.82" b="0"/>
             </FontString>
             
             <!-- Column Headers - aligned with COLUMNS constants (offset by scroll frame x=10) -->
             <FontString name="SocialLFGColName" inherits="GameFontHighlightSmall" text="Name">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="20" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColRoles" inherits="GameFontHighlightSmall" text="Roles">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="125" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="125" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColCategories" inherits="GameFontHighlightSmall" text="Categories">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="185" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="185" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColIlvl" inherits="GameFontHighlightSmall" text="iLvl">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="310" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="310" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColRio" inherits="GameFontHighlightSmall" text="M+ Score">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="345" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="345" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColKeystone" inherits="GameFontHighlightSmall" text="Key">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="405" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="405" y="-213"/></Anchors>
             </FontString>
             <FontString name="SocialLFGColActions" inherits="GameFontHighlightSmall" text="Actions">
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="470" y="-193"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="470" y="-213"/></Anchors>
             </FontString>
             
             <!-- Header separator line -->
             <Texture name="$parentHeaderLine">
                 <Size x="610" y="1"/>
-                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-205"/></Anchors>
+                <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-225"/></Anchors>
                 <Color r="0.3" g="0.3" b="0.3" a="1"/>
             </Texture>
         </Layer>
@@ -217,10 +217,25 @@
             </Scripts>
         </Button>
         
+        <!-- ============================================= -->
+        <!-- Settings Checkbox: Auto Re-register -->
+        <!-- ============================================= -->
+        <CheckButton name="SocialLFGAutoReregisterCheck" inherits="UICheckButtonTemplate" text="Register again after leaving a group">
+            <Size x="22" y="22"/>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-145"/></Anchors>
+            <ButtonText>
+                <Anchors><Anchor point="LEFT" relativePoint="RIGHT" x="2" y="0"/></Anchors>
+            </ButtonText>
+            <NormalFont style="GameFontHighlightSmall"/>
+            <Scripts>
+                <OnClick>SocialLFG.UI:OnAutoReregisterClick()</OnClick>
+            </Scripts>
+        </CheckButton>
+        
         <!-- Separator line after controls -->
         <Frame name="SocialLFGControlSeparator">
             <Size x="610" y="1"/>
-            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-150"/></Anchors>
+            <Anchors><Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="15" y="-170"/></Anchors>
             <Layers>
                 <Layer level="ARTWORK">
                     <Texture setAllPoints="true">
@@ -234,9 +249,9 @@
         <!-- Scroll Frame for Member List -->
         <!-- ============================================= -->
         <ScrollFrame name="SocialLFGScrollFrame" inherits="UIPanelScrollFrameTemplate">
-            <Size x="610" y="320"/>
+            <Size x="610" y="300"/>
             <Anchors>
-                <Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="10" y="-210"/>
+                <Anchor point="TOPLEFT" relativeTo="SocialLFGFrame" x="10" y="-230"/>
             </Anchors>
             <ScrollChild>
                 <Frame name="SocialLFGScrollChild">

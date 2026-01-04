@@ -606,7 +606,7 @@ function UI:UpdateRow(row, memberData, index, currentPlayerName, currentPlayerFu
 
     -- Update cache
     row._cache = {
-        playerFullName = playerName,
+        playerFullName = playerFullName,
         nameTextStr = nameTextStr,
         class = class,
         rolesString = rolesString,
